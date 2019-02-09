@@ -397,7 +397,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
             for ind, ax_dict in enumerate(self.axes):
                 if ind in self.cur_axes:
-                    print(ind)
                     if ax_dict['field1'].text()  == ax_dict['field2'].text():
                         self.toplabel.setText("WARNING: Axes range is 0!")
                         return False
@@ -447,7 +446,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
 
     def plot1D(self):
-        print("plot 1d")
         
         #Horizontal axis for this 1D plot - obj
         ax_ind = self.cur_axes[0]
@@ -549,7 +547,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         cmname = self.colormap_dict[cmap_key]
         colormap = matplotlib.cm.get_cmap(name=cmname)
         
-        print("Plotting 2D data")
         self.canvas_ax = self.canvas.figure.subplots()
         
         #self.canvas_ax.contourf(hax, vax, data, levels, cmap=colormap)
