@@ -1,17 +1,16 @@
 import sys
-import time
 import os
 import h5py
 
 import numpy as np
 
-from matplotlib.backends.qt_compat import QtCore, QtWidgets, QtGui, is_pyqt5
+from matplotlib.backends.qt_compat import  QtWidgets, QtGui, is_pyqt5
 if is_pyqt5():
     from matplotlib.backends.backend_qt5agg import (
-        FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+        FigureCanvas)
 else:
     from matplotlib.backends.backend_qt4agg import (
-        FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+        FigureCanvas)
     
 import matplotlib.figure
 import matplotlib.cm
