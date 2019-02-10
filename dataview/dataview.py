@@ -48,6 +48,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.last_axes = []#Used to smoothly transfer axes info when new files loaded  
         
         self.datarange = [None, None]
+
         
         self.colormap_dict = {'Autumn':'autumn', "Winter":"winter", "Cool":"cool", 
                           "Ocean":"ocean", "Rainbow":"gist_rainbow",
@@ -112,16 +113,41 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.plottype_field.show()
         self.plottype_box.addWidget(self.plottype_field)
         
+        self.plot_title_checkbox = QtWidgets.QCheckBox("Auto plot title?")
+        self.plot_title_checkbox.setChecked(True)  
+        self.plot_title_checkbox.stateChanged.connect(self.makePlot)
+        self.plottype_box.addWidget(self.plot_title_checkbox)
         
-        self.colormap_box = QtWidgets.QHBoxLayout()
-        self.centerbox.addLayout(self.colormap_box)
+        
+        
+        self.fig_2d_props_box = QtWidgets.QHBoxLayout()
+        self.centerbox.addLayout(self.fig_2d_props_box)
+        
+        self.fig_2d_label = QtWidgets.QLabel("2D Plot Parameters: ")
+        self.fig_2d_props_box.addWidget(self.fig_2d_label)
+        
+        self.plotImageBtn = QtWidgets.QRadioButton("ImagePlot")
+        self.plotImageBtn.setChecked(True)
+        self.plotImageBtn.toggled.connect(self.setImageVsContour)
+        self.fig_2d_props_box.addWidget(self.plotImageBtn)
+        
+        self.plotContourBtn = QtWidgets.QRadioButton("ContourPlot")
+        self.fig_2d_props_box.addWidget(self.plotContourBtn)
+        
+        #Make colormap selection bar
         self.colormap_lbl = QtWidgets.QLabel("Colormap: ")
-        self.colormap_box.addWidget(self.colormap_lbl)
+        self.fig_2d_props_box.addWidget(self.colormap_lbl)
         self.colormap_field = QtWidgets.QComboBox()
-        self.colormap_box.addWidget(self.colormap_field)
+        self.fig_2d_props_box.addWidget(self.colormap_field)
         self.colormap_field.currentIndexChanged.connect(self.makePlot)
         for k in self.colormap_dict.keys():
             self.colormap_field.addItem(k)
+            
+            
+     
+        
+            
+            
         
         
         
@@ -186,13 +212,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.dropdown2_box.addWidget(self.dropdown2)
         
         
+        #Create real units vs indices radio button
+        self.index_button_box = QtWidgets.QHBoxLayout()
+        self.select_ax_box.addLayout(self.index_button_box)
+        
+
         self.updatePlotType()
         self.updateAxesFields()
         
-         
         
-        
-        
+
         
 
     def fileDialog(self):
@@ -220,9 +249,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 ax_dict['name'] =  name
                 ax_dict['ax'] = f[name][:]
                 ax_dict['ind'] = ind
-                #ax_dict['step'] =  np.mean(np.gradient(ax_dict['ax']))
+                ax_dict['unit'] = f[name].attrs['unit']
                 ax_dict['valrange'] = ( f[name][0] , f[name][-1] )
                 ax_dict['indrange'] = ( 0 ,  len(f[name]) -1 )
+                
+                try:
+                    ax_dict['step'] = np.mean(np.gradient(ax_dict['ax']))
+                except ValueError:
+                    ax_dict['step'] = 1
+
+                
                 self.axes.append(ax_dict)
                 
         self.fillAxesBox()
@@ -244,9 +280,18 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             #Take the ax_dict out of the axes array
             ax_dict = self.axes[i]
             
-            lbl = (str(ax_dict['name']) + ' : [' + 
+            ax_dict['ax_lbl'] = str(ax_dict['name']) + ' -> '
+
+            ax_dict['ind_lbl']=  ('Indices: [' + 
                    str(int(ax_dict['indrange'][0])) + ',' + 
                    str(int(ax_dict['indrange'][1])) + ']' )
+    
+            
+            v1 = self.numFormat(ax_dict['valrange'][0])
+            v2 = self.numFormat(ax_dict['valrange'][1])
+            ax_dict['val_lbl'] =  ('Values: [' + 
+                    v1 + ',' + v2 + '] ' +
+                    ax_dict['unit'])
    
             #Add the axes names to the dropdown menus
             self.dropdown1.addItem(ax_dict['name'])
@@ -254,26 +299,39 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
             ax_dict['box'] = QtWidgets.QHBoxLayout()
             self.axesbox.addLayout(ax_dict['box'])
+  
+
+            ax_dict['label1']  = QtWidgets.QLabel( ax_dict['ax_lbl'] )  
+            ax_dict['box'].addWidget(ax_dict['label1'])
             
-            ax_dict['label']  = QtWidgets.QLabel( lbl )  
-            ax_dict['box'].addWidget(ax_dict['label'])
+            ax_dict['label2']  = QtWidgets.QLabel( ax_dict['ind_lbl'] )  
+            ax_dict['box'].addWidget(ax_dict['label2'])
             
-            #Add the first range field
+            width = 80
             ax_dict['field1']  = QtWidgets.QSpinBox()
-            ax_dict['field1'].editingFinished.connect(self.updateAxRangeAction)
+            ax_dict['field1'].editingFinished.connect(self.updateAxesFieldsAction)
             ax_dict['field1'].setRange(ax_dict['indrange'][0],ax_dict['indrange'][1])
             ax_dict['field1'].setSingleStep(1)
-            ax_dict['field1'].setMinimumWidth(70)
+            ax_dict['field1'].setFixedWidth(width)
             ax_dict['box'].addWidget(ax_dict['field1'])
         
-            
-            #Add the second range field (will only show if this dimension is an axis)
             ax_dict['field2']  = QtWidgets.QSpinBox()
-            ax_dict['field2'].editingFinished.connect(self.updateAxRangeAction)
+            ax_dict['field2'].editingFinished.connect(self.updateAxesFieldsAction)
             ax_dict['field2'].setRange(ax_dict['indrange'][0],ax_dict['indrange'][1])
             ax_dict['field2'].setSingleStep(1)
-            ax_dict['field2'].setMinimumWidth(70)
+            ax_dict['field2'].setFixedWidth(width)
             ax_dict['box'].addWidget(ax_dict['field2'])
+            
+            ax_dict['label3']  = QtWidgets.QLabel( " Step size: " )  
+            ax_dict['box'].addWidget(ax_dict['label3'])
+            
+            ax_dict['field3']  = QtWidgets.QSpinBox()
+            ax_dict['field3'].editingFinished.connect(self.updateAxesFieldStepAction )
+            ax_dict['field3'].setRange(1,ax_dict['indrange'][1]-1)
+            ax_dict['field3'].setSingleStep(1)
+            ax_dict['field3'].setFixedWidth(60)
+            ax_dict['box'].addWidget(ax_dict['field3'])
+            
 
             #Put the ax_dict back into the axes array
             self.axes[i] = ax_dict
@@ -327,8 +385,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.updateAxesFields()
         self.makePlot()
 
-            
-            
+    def updateAxesFieldStepAction(self):
+        for i, ax in enumerate(self.axes):
+            step = self.axes[i]['field3'].value()
+            self.axes[i]['field1'].setSingleStep(step)
+            self.axes[i]['field2'].setSingleStep(step)
+
     def updateAxesFields(self):
         try:
             if self.plottype == 1:
@@ -339,9 +401,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             for i, ax in enumerate(self.axes):
                 if 'field2' in ax.keys():
                     if i in self.cur_axes:
-                        ax['field2'].show()
+                        #ax['field2'].show()
+                        ax['field2'].setDisabled(False)
                     else:
-                        ax['field2'].hide()
+                        ax['field2'].setDisabled(True)
         except AttributeError:
             pass
         
@@ -410,6 +473,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         return True
     
+    
+    def setImageVsContour(self):
+        self.makePlot()
+    
 
 
         
@@ -476,11 +543,20 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
 
         self.canvas_ax = self.canvas.figure.subplots()
-        #t = np.linspace(0, 10, 501)
+
+
         self.canvas_ax.plot(hax, data, linestyle='-')
+        
+        #self.canvas_ax.text(0,1, 'THIS IS SOME SAMPLE TEXT', transform=self.canvas_ax.transAxes)
+        
+        
         
         self.canvas_ax.set_xlabel(str(hname) + ' (' + str(hunit) + ')')
         self.canvas_ax.set_ylabel('(' + str(dataunit) + ')')
+        
+        if self.plot_title_checkbox.isChecked():
+            title = self.plotTitle()
+            self.canvas_ax.set_title(title)
 
         
         #Setup axis formats
@@ -490,6 +566,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #Autorange if appropriate
         if not self.datarange_auto.isChecked():
             self.canvas_ax.set_ylim(self.datarange[0], self.datarange[1])
+            
+        
             
         self.canvas.draw()
     
@@ -537,26 +615,26 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             cmin = self.datarange[0]
             cmax = self.datarange[1]
         else:
-            cmin = None
-            cmax = None
+            cmin = np.min(data)
+            cmax = np.max(data)
             
-        #levels = np.linspace(cmin, cmax, num=50)
+        levels = np.linspace(cmin, cmax, num=50)
         
         cmap_key = self.colormap_field.currentText()
         cmname = self.colormap_dict[cmap_key]
         colormap = matplotlib.cm.get_cmap(name=cmname)
         
         self.canvas_ax = self.canvas.figure.subplots()
-        
-        #self.canvas_ax.contourf(hax, vax, data, levels, cmap=colormap)
-        
-        cs = self.canvas_ax.imshow(data, origin='upper',
-                                   vmin=cmin, vmax=cmax,
-                                   aspect='auto', interpolation = 'nearest',
-                                   extent=[hax[0], hax[-1], vax[0], vax[-1]],
-                                   cmap = colormap)
-        
-        
+
+        #Make a contour plot or image plot, depending on the selection
+        if self.plotContourBtn.isChecked():
+            cs = self.canvas_ax.contourf(hax, vax, data, levels, cmap=colormap)
+        else:
+            cs = self.canvas_ax.imshow(data, origin='upper',
+                                       vmin=cmin, vmax=cmax,
+                                       aspect='auto', interpolation = 'nearest',
+                                       extent=[hax[0], hax[-1], vax[0], vax[-1]],
+                                       cmap = colormap)
         
         
         cbar = self.canvas.figure.colorbar(cs, orientation='horizontal', 
@@ -566,14 +644,41 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.canvas_ax.set_xlabel(str(hname) + ' (' + str(hunit) + ')')
         self.canvas_ax.set_ylabel(str(vname) + ' (' + str(vunit) + ')')
 
-        
+        if self.plot_title_checkbox.isChecked():
+            title = self.plotTitle()
+            self.canvas_ax.set_title(title)
+            
         #Setup axis formats
         self.canvas_ax.ticklabel_format(axis='x', scilimits=(-3,3) )
         self.canvas_ax.ticklabel_format(axis='y', scilimits=(-3,3) )
         
         
         self.canvas.draw()
-        print("Done plotting")
+        
+        
+    def plotTitle(self):
+        strarr = []
+        strarr.append( os.path.basename(self.filepath) )
+
+        curarr = []
+        otherarr = []
+        
+        for i, ax in enumerate(self.axes):
+             axarr = ax['ax']
+             if i in self.cur_axes:
+                 val = ( self.numFormat(axarr [ ax['field1'].value() ]),
+                         self.numFormat(axarr[ ax['field2'].value()]),
+                         ax['unit'])
+                 curarr.append( ax['name'] + '=[%s,%s] %s' % val )
+             else:
+                 val = ( self.numFormat(axarr [ ax['field1'].value() ]),
+                         ax['unit'])
+                 otherarr.append( ax['name'] + '=%s %s' % val )
+                 
+        strarr.append( ', '.join(curarr) )
+        strarr.append( ', '.join(otherarr))
+        return '\n'.join(strarr)
+                 
         
         
     def savePlot(self):
@@ -585,6 +690,15 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         savefile = savedialog.getSaveFileName(self, "Save as: ", suggested_name, "")[0]
         self.figure.savefig(savefile)
+        
+        
+    def numFormat(self, n):
+        if n == int(n):
+            return '%d' % n
+        elif n > 100 or n < 0.01:
+            return '%.2E' % n
+        else:
+            return '%.2f' % n
         
         
         
