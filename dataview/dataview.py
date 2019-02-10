@@ -313,6 +313,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax_dict['field1'].setRange(ax_dict['indrange'][0],ax_dict['indrange'][1])
             ax_dict['field1'].setSingleStep(1)
             ax_dict['field1'].setFixedWidth(width)
+            ax_dict['field1'].setWrapping(True)
             ax_dict['box'].addWidget(ax_dict['field1'])
         
             ax_dict['field2']  = QtWidgets.QSpinBox()
@@ -320,6 +321,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax_dict['field2'].setRange(ax_dict['indrange'][0],ax_dict['indrange'][1])
             ax_dict['field2'].setSingleStep(1)
             ax_dict['field2'].setFixedWidth(width)
+            ax_dict['field2'].setWrapping(True)
             ax_dict['box'].addWidget(ax_dict['field2'])
             
             ax_dict['label3']  = QtWidgets.QLabel( " Step size: " )  
