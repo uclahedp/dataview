@@ -179,14 +179,17 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         self.datarange_a = QtWidgets.QDoubleSpinBox()
         self.datarange_a.editingFinished.connect(self.updateDataRangeAction)
+        self.datarange_a.setRange(-1e100, 1e100)
         self.datarange_box.addWidget(self.datarange_a )
         
         self.datarange_b = QtWidgets.QDoubleSpinBox()
         self.datarange_b.editingFinished.connect(self.updateDataRangeAction)
+        self.datarange_b.setRange(-1e100, 1e100)
         self.datarange_box.addWidget(self.datarange_b )
         
         self.datarange_unitlbl = QtWidgets.QLabel("")
         self.datarange_box.addWidget(self.datarange_unitlbl)
+
 
         
         #Create the first axis dropdown menu
@@ -322,6 +325,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax_dict['field2'].setSingleStep(1)
             ax_dict['field2'].setFixedWidth(width)
             ax_dict['field2'].setWrapping(True)
+            ax_dict['field2'].setValue(ax_dict['indrange'][1])
             ax_dict['box'].addWidget(ax_dict['field2'])
             
             ax_dict['label3']  = QtWidgets.QLabel( " Step size: " )  
@@ -632,7 +636,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         if self.plotContourBtn.isChecked():
             cs = self.canvas_ax.contourf(hax, vax, data, levels, cmap=colormap)
         else:
-            cs = self.canvas_ax.imshow(data, origin='upper',
+            cs = self.canvas_ax.imshow(data, origin='lower',
                                        vmin=cmin, vmax=cmax,
                                        aspect='auto', interpolation = 'nearest',
                                        extent=[hax[0], hax[-1], vax[0], vax[-1]],
