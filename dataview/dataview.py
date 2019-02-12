@@ -43,6 +43,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.axes = []
         self.plottype = 1 #1 or 2 for 1D or 2D plot
         self.cur_axes = [0,0]
+        self.avg_axes = []
         
         self.last_cur_axes = [0,0]
         self.last_axes = []#Used to smoothly transfer axes info when new files loaded  
@@ -230,9 +231,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     def fileDialog(self):
         self.last_axes = self.axes #Copy over any axes to memory
         self.axes = []
+        
+        self.avg_axes = []
 
         self.last_cur_axes = self.cur_axes
         self.cur_axes = (0,)
+        
         
         print("load")
         opendialog = QtWidgets.QFileDialog()
@@ -283,9 +287,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             #Take the ax_dict out of the axes array
             ax_dict = self.axes[i]
             
-            ax_dict['ax_lbl'] = str(ax_dict['name']) + ' -> '
-
-            ax_dict['ind_lbl']=  ('Indices: [' + 
+            ax_dict['ind_lbl']=  (str(ax_dict['name']) + ' -> ' + 
+                   'Indices: [' + 
                    str(int(ax_dict['indrange'][0])) + ',' + 
                    str(int(ax_dict['indrange'][1])) + ']' )
     
@@ -304,12 +307,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             self.axesbox.addLayout(ax_dict['box'])
   
 
-            ax_dict['label1']  = QtWidgets.QLabel( ax_dict['ax_lbl'] )  
+            ax_dict['label1']  = QtWidgets.QLabel( ax_dict['ind_lbl'] )  
+            ax_dict['label1'].setFixedWidth(160)
             ax_dict['box'].addWidget(ax_dict['label1'])
             
-            ax_dict['label2']  = QtWidgets.QLabel( ax_dict['ind_lbl'] )  
-            ax_dict['box'].addWidget(ax_dict['label2'])
-            
+
             width = 80
             ax_dict['field1']  = QtWidgets.QSpinBox()
             ax_dict['field1'].editingFinished.connect(self.updateAxesFieldsAction)
@@ -337,6 +339,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax_dict['field3'].setSingleStep(1)
             ax_dict['field3'].setFixedWidth(60)
             ax_dict['box'].addWidget(ax_dict['field3'])
+            
+            ax_dict['avgcheckbox'] = QtWidgets.QCheckBox("Avg")
+            ax_dict['avgcheckbox'].setChecked(False)  
+            ax_dict['avgcheckbox'].stateChanged.connect(self.updateAvgCheckBoxAction)
+            ax_dict['box'].addWidget(ax_dict['avgcheckbox'])
             
 
             #Put the ax_dict back into the axes array
@@ -404,17 +411,30 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             elif self.plottype ==2:
                 self.cur_axes = (self.dropdown1.currentIndex(), self.dropdown2.currentIndex())
             
+            self.avg_axes = []
             for i, ax in enumerate(self.axes):
-                if 'field2' in ax.keys():
-                    if i in self.cur_axes:
-                        #ax['field2'].show()
-                        ax['field2'].setDisabled(False)
+                #This if statement to catch if axes not init yet
+                if  'field2' in ax.keys():
+                    if  ax['avgcheckbox'].isChecked()==False :
+                         ax['field1'].setDisabled(False)
+                    else:
+                         self.avg_axes.append(i)
+                         ax['field1'].setDisabled(True)
+                        
+                    if i in self.cur_axes and ax['avgcheckbox'].isChecked()==False :
+                            ax['field2'].setDisabled(False)
                     else:
                         ax['field2'].setDisabled(True)
+                    
         except AttributeError:
             pass
         
     def updateAxesFieldsAction(self):
+        self.updateAxesFields()
+        self.makePlot()
+        
+        
+    def updateAvgCheckBoxAction(self):
         self.updateAxesFields()
         self.makePlot()
         
@@ -524,24 +544,34 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
         dslice = []
         
+        print(self.avg_axes)
         for i in range(len(self.axes) ):
             d  = self.axes[i]
-            if i == ax_ind:
+            if i == ax_ind:   
                 hname = d['name']
                 a = int(d['field1'].text())
                 b = int(d['field2'].text())
                 dslice.append( slice(a, b, 1) )
                 hslice = slice(a,b, 1)
                 
+            elif i  in self.avg_axes:
+                print(str(i) + ' is in avg_axes')
+                dslice.append( slice(None,None,None) )
+
             else:
                 a = int(d['field1'].text())
                 dslice.append( slice(a, a+1, 1) )
                 
         with h5py.File(self.filepath, 'r') as f:
             hax = np.squeeze(f[hname][hslice])#already a tuple
-            data = np.squeeze(f['data'][tuple(dslice)])
-            dataunit  = str(f['data'].attrs['unit'])
             hunit = str(f[hname].attrs['unit'])
+            
+            data = f['data'][tuple(dslice)]
+            if len(self.avg_axes) != 0:
+                data = np.mean(data, axis=tuple(self.avg_axes ))
+            data = np.squeeze(data)
+            dataunit  = str(f['data'].attrs['unit'])
+            
             
             
         
@@ -600,6 +630,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 dslice.append( slice(a, b, 1) )
                 vslice = slice(a,b, 1)
                 
+            elif i  in self.avg_axes:
+                print(str(i) + ' is in avg_axes')
+                dslice.append( slice(None,None,None) )
+                
             else:
                 a = int(d['field1'].text())
                 dslice.append( slice(a, a+1, 1) )
@@ -607,10 +641,18 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         with h5py.File(self.filepath, 'r') as f:
             hax = np.squeeze(f[hname][hslice])#already a tuple
             vax = np.squeeze(f[vname][vslice])#already a tuple
-            data = np.squeeze(f['data'][tuple(dslice)])
-            dataunit  = str(f['data'].attrs['unit'])
             hunit = f[hname].attrs['unit']
             vunit = f[vname].attrs['unit']
+            
+            
+            data = f['data'][tuple(dslice)]
+            if len(self.avg_axes) != 0:
+                data = np.mean(data, axis=tuple(self.avg_axes ))
+            data = np.squeeze(data)
+            dataunit  = str(f['data'].attrs['unit'])
+            
+            
+            
             
         if vind > hind:
             data = data.transpose()
@@ -676,6 +718,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                          self.numFormat(axarr[ ax['field2'].value()]),
                          ax['unit'])
                  curarr.append( ax['name'] + '=[%s,%s] %s' % val )
+             elif i in self.avg_axes:
+                 otherarr.append( ax['name'] + '= avg' )
              else:
                  val = ( self.numFormat(axarr [ ax['field1'].value() ]),
                          ax['unit'])
