@@ -673,6 +673,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         colormap = matplotlib.cm.get_cmap(name=cmname)
         
         self.canvas_ax = self.canvas.figure.subplots()
+        
+        #Setup axis formats
+        self.canvas_ax.ticklabel_format(axis='x', scilimits=(-3,3) )
+        self.canvas_ax.ticklabel_format(axis='y', scilimits=(-3,3) )
 
         #Make a contour plot or image plot, depending on the selection
         if self.plotContourBtn.isChecked():
@@ -683,10 +687,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                                        aspect='auto', interpolation = 'nearest',
                                        extent=[hax[0], hax[-1], vax[0], vax[-1]],
                                        cmap = colormap)
+            
+            
+        if np.max( np.abs(data ) ) > 100 or np.max( np.abs(data ) ) < 0.01:
+            cbformat = '%.1e'
+        else:
+            cbformat = '%.1f'
         
         
         cbar = self.canvas.figure.colorbar(cs, orientation='horizontal', 
-                                           format='%.2f')
+                                           format=cbformat)
         cbar.ax.set_xlabel('(' + str(dataunit) + ')' )
         
         self.canvas_ax.set_xlabel(str(hname) + ' (' + str(hunit) + ')')
@@ -696,9 +706,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             title = self.plotTitle()
             self.canvas_ax.set_title(title)
             
-        #Setup axis formats
-        self.canvas_ax.ticklabel_format(axis='x', scilimits=(-3,3) )
-        self.canvas_ax.ticklabel_format(axis='y', scilimits=(-3,3) )
+        
         
         
         self.canvas.draw()
