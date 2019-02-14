@@ -530,7 +530,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         if layout !=None:
             while layout.count():
                 child = layout.takeAt(0)
-                if child.widget() is not None:
+                if child.widget() is not None:c
                     child.widget().deleteLater()
                 elif child.layout() is not None:
                     self.clearLayout(child.layout())
@@ -555,7 +555,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 hslice = slice(a,b, 1)
                 
             elif i  in self.avg_axes:
-                print(str(i) + ' is in avg_axes')
                 dslice.append( slice(None,None,None) )
 
             else:
