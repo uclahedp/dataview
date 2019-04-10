@@ -4,14 +4,14 @@ import h5py
 
 import numpy as np
 
-from matplotlib.backends.qt_compat import  QtWidgets, QtGui, is_pyqt5
-if is_pyqt5():
-    from matplotlib.backends.backend_qt5agg import (
-        FigureCanvas)
-else:
-    from matplotlib.backends.backend_qt4agg import (
-        FigureCanvas)
-    
+
+from PyQt5 import QtWidgets, QtGui
+#from matplotlib.backends.qt_compat import  QtWidgets, QtGui
+
+
+import matplotlib
+matplotlib.use("Qt5Agg")
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.figure
 import matplotlib.cm
 
