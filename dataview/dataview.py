@@ -328,7 +328,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
   
 
             ax_dict['label1']  = QtWidgets.QLabel('')  
-            ax_dict['label1'].setFixedWidth(160)
+            ax_dict['label1'].setFixedWidth(250)
             ax_dict['box'].addWidget(ax_dict['label1'])
             
             ax_dict['indvalbtngrp'] = QtWidgets.QButtonGroup()
