@@ -25,7 +25,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
      
     def __init__(self):
         super().__init__()
-        self.debug = True
+        self.debug = False
         self.buildGUI()
 
 
@@ -536,7 +536,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            ax = self.axes[axind]
            #Check that the original axis is is > 1 long
            l = ax['ax'].shape[0]
-           print(l)
            if l > 1:
                pass
            else:
@@ -682,7 +681,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                      vslice = slice(a,b, 1)
             
             elif d['avgcheckbox'].isChecked():
-                print(str(i) + ' is in avg_axes')
                 dslice.append( slice(None,None,None) )
                 avg_axes.append(i)
                 
@@ -891,7 +889,8 @@ if __name__ == "__main__":
     if app is None:
         app = QtWidgets.QApplication(sys.argv)
     else:
-        print('QApplication instance already exists: %s' % str(app))
+        #print('QApplication instance already exists: %s' % str(app))
+        pass
     
     w = ApplicationWindow()
     w.show()
