@@ -10,19 +10,19 @@ def readme():
 with open('README.rst') as f:
 	return f.read()
 
-setup(name='uclahedp',
+setup(name='dataview',
       version='0.1',
       description='dataView program for UCLA HEDP group hdf5 files.',
-      url = 'https://github.com/phyzicist/uclahedp', 
+      url = 'https://github.com/uclahedp/dataview', 
       author = 'Peter Heuer',
       author_email = 'pheuer@physics.ucla.edu', 
       license = 'MIT',
       packages=['dataview'],
       install_requires=[
       	'h5py',
-      	'bapsflib',
       	'pyqt5',
       	'matplotlib',
+	'astropy',
       	'numpy'
       ],
       zip_safe = False )
