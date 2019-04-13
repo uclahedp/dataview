@@ -9,6 +9,7 @@ import h5py
 
 import numpy as np
 
+from astropy import units
 
 from PyQt5 import QtWidgets, QtGui
 
@@ -16,9 +17,6 @@ import matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.figure
 import matplotlib.cm
-
-
-
 
 
 class ApplicationWindow(QtWidgets.QMainWindow):
@@ -67,6 +65,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #disconnected at such times.
         self.connectedList = []
        
+        #Unit of data in file (never changes)
+        self.data_native_unit = ''
+        #Factor for correcting data for units
+        self.data_unit_factor = 1.0
+        
         
 
         #This is the primary layout
@@ -177,28 +180,40 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.datarange_auto = QtWidgets.QCheckBox("Autorange?")
         self.datarange_auto.setChecked(True)  
         self.datarange_box.addWidget(self.datarange_auto)
-        self.datarange_auto.stateChanged.connect(self.makePlot)
+        self.datarange_auto.stateChanged.connect(self.updateDataRange)
+        
+        self.datarange_center = QtWidgets.QCheckBox("Center zero?")
+        self.datarange_center.setChecked(False)  
+        self.datarange_box.addWidget(self.datarange_center)
+        self.datarange_center.stateChanged.connect(self.updateDataRange)
 
         
         self.datarange_lbl = QtWidgets.QLabel("Data Range: ")
+        self.datarange_lbl.setFixedWidth(60)
         self.datarange_box.addWidget(self.datarange_lbl)
         
         self.datarange_a = ScientificDoubleSpinBox()
         self.datarange_a.setRange(-1e100, 1e100)
         self.datarange_box.addWidget(self.datarange_a )
-        self.datarange_a.editingFinished.connect(self.makePlot)
+        self.datarange_a.editingFinished.connect(self.updateDataRange)
         self.connectedList.append(self.datarange_a)
         
         self.datarange_b = ScientificDoubleSpinBox()
         self.datarange_b.setRange(-1e100, 1e100)
         self.datarange_box.addWidget(self.datarange_b )
-        self.datarange_b.editingFinished.connect(self.makePlot)
+        self.datarange_b.editingFinished.connect(self.updateDataRange)
         self.connectedList.append(self.datarange_b)
         
-        self.datarange_unitlbl = QtWidgets.QLabel("")
+        self.datarange_unitlbl = QtWidgets.QLabel("Data Unit: ")
+        self.datarange_unitlbl.setFixedWidth(60)
         self.datarange_box.addWidget(self.datarange_unitlbl)
-
-
+        
+    
+        self.data_unit_field = QtWidgets.QLineEdit('')
+        self.data_unit_field.setFixedWidth(40)
+        self.datarange_box.addWidget(self.data_unit_field)
+        self.data_unit_field.editingFinished.connect(self.updateDataUnits)
+        self.connectedList.append(self.data_unit_field)
         
         #Create the first axis dropdown menu
         self.dropdown1_box = QtWidgets.QHBoxLayout()
@@ -256,12 +271,14 @@ class ApplicationWindow(QtWidgets.QMainWindow):
              self.last_axes = self.axes #Copy over any axes to memory
              self.axes = []
              self.last_cur_axes = self.cur_axes
-             self.cur_axes = (0,)
+             self.cur_axes = [0,0]
              
              with h5py.File(self.filepath, 'r') as f:
                   temp_axes = ( f['data'].attrs['dimensions'] ) 
-                  dataunit = f['data'].attrs['unit']
-                  self.datarange_unitlbl.setText(dataunit)
+                  
+                  self.data_unit_field.setText( f['data'].attrs['unit'] )
+                  self.data_native_unit = self.data_unit_field.text()
+
                   
                   for ind, ax in enumerate(temp_axes):
                      ax_dict = {}
@@ -269,12 +286,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                      ax_dict['name'] =  name
                      ax_dict['ax'] = f[name][:]
                      ax_dict['axind'] = ind
-                     ax_dict['unit'] = f[name].attrs['unit']
+                     ax_dict['native_unit'] = f[name].attrs['unit']
                      
                      ax_dict['indminmax'] = ( 0 ,  len(f[name]) -1 )
-                     #ax_dict['indrange'] = ax_dict['indminmax']
                      ax_dict['valminmax'] = ( f[name][0] , f[name][-1] )
-                     #ax_dict['valrange'] = ax_dict['valminmax'] 
+
                      
                      try:
                          ax_dict['step'] = np.mean(np.gradient(ax_dict['ax']))
@@ -342,7 +358,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
             ax_dict['val_a']  = ScientificDoubleSpinBox()
             ax_dict['val_a'].setRange(ax_dict['valminmax'][0], ax_dict['valminmax'][1])
-            #ax_dict['val_a'].setSingleStep(ax_dict['step'])
             ax_dict['val_a'].setFixedWidth(width)
             ax_dict['val_a'].setValue(0)
             ax_dict['val_a'].setWrapping(True)
@@ -361,12 +376,22 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
             ax_dict['val_b']  = ScientificDoubleSpinBox()
             ax_dict['val_b'].setRange(ax_dict['valminmax'][0], ax_dict['valminmax'][1])
-            #ax_dict['val_b'].setSingleStep(ax_dict['step'])
             ax_dict['val_b'].setFixedWidth(width)
             ax_dict['val_b'].setValue(ax_dict['valminmax'][1])
             ax_dict['val_b'].setWrapping(True)
             ax_dict['box'].addWidget(ax_dict['val_b'])
             ax_dict['val_b'].editingFinished.connect(self.updateAxesFieldsAction)
+            
+            ax_dict['unit_lbl'] = QtWidgets.QLabel("Unit: ")
+            ax_dict['unit_lbl'].setFixedWidth(30)
+            ax_dict['box'].addWidget(ax_dict['unit_lbl'])
+        
+            
+            ax_dict['unit_factor'] = 1.0
+            ax_dict['unit_field'] = QtWidgets.QLineEdit(str(ax_dict['native_unit']))
+            ax_dict['unit_field'].setFixedWidth(40)
+            ax_dict['box'].addWidget(ax_dict['unit_field'])
+            ax_dict['unit_field'].editingFinished.connect(self.updateAxesUnits)
             
             
             ax_dict['avgcheckbox'] = QtWidgets.QCheckBox("Avg")
@@ -384,21 +409,27 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 if ax['name'] == old_ax['name']:
                     ax['ind_a'].setValue( old_ax['ind_a'].value() )
                     ax['ind_b'].setValue( old_ax['ind_b'].value() )
+                    
+                    ax['val_a'].setRange(old_ax['val_a'].minimum(), old_ax['val_a'].maximum())
+                    ax['val_b'].setRange(old_ax['val_b'].minimum(), old_ax['val_b'].maximum())
                     ax['val_a'].setValue( old_ax['val_a'].value() )
                     ax['val_b'].setValue( old_ax['val_b'].value() )
+                    
+                    ax['unit_factor'] =  old_ax['unit_factor']
+                    ax['unit_field'].setText(old_ax['unit_field'].text())
     
- 
+
         #If new axes match old ones, set the cur_axes to match
         if len(self.last_axes) != 0:
-            cur_name = self.last_axes[ self.last_cur_axes[0] ]['name']
-            ind = self.dropdown1.findText(cur_name)
-            if ind != -1:
-                self.dropdown1.setCurrentIndex(ind)
-                
-            cur_name = self.last_axes[ self.last_cur_axes[1] ]['name']
-            ind = self.dropdown2.findText(cur_name)
-            if ind != -1:
-                self.dropdown2.setCurrentIndex(ind)
+             cur_name = self.last_axes[ self.last_cur_axes[0] ]['name']
+             ind = self.dropdown1.findText(cur_name)
+             if ind != -1:
+                 self.dropdown1.setCurrentIndex(ind)
+             if self.plottype_field.currentIndex() == 1:
+                 cur_name = self.last_axes[ self.last_cur_axes[1] ]['name']
+                 ind = self.dropdown2.findText(cur_name)
+                 if ind != -1:
+                     self.dropdown2.setCurrentIndex(ind)
                 
         #Once all the fields have been created, make sure they are set correctly
         self.updateAxesFields()
@@ -451,16 +482,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            if ax['valbtn'].isChecked():
                 val_a = float(ax['val_a'].value())
                 val_b = float(ax['val_b'].value())
-                ind_a = np.argmin(np.abs(ax['ax'] - val_a ))
-                ind_b = np.argmin(np.abs(ax['ax'] - val_b ))
+                ind_a = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_a ))
+                ind_b = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_b ))
                 ax['ind_a'].setValue(ind_a)
                 ax['ind_b'].setValue(ind_b)
 
            elif ax['indbtn'].isChecked():
                 ind_a = int(ax['ind_a'].value())
                 ind_b = int(ax['ind_b'].value())
-                val_a = ax['ax'][ind_a]
-                val_b = ax['ax'][ind_b]
+                val_a = ax['ax'][ind_a]*ax['unit_factor']
+                val_b = ax['ax'][ind_b]*ax['unit_factor']
                 ax['val_a'].setValue(val_a)
                 ax['val_b'].setValue(val_b)
                 
@@ -469,9 +500,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            if ax['valbtn'].isChecked():
                #Currently using values, format label to match
                lbltxt = ( ax['name'] + ': ' +
-                         'Values [' + self.numFormat(ax['valminmax'][0]) +
-                         ', ' + self.numFormat(ax['valminmax'][1]) +
-                         '] ' + ax['unit'])
+                         'Values [' + self.numFormat(ax['valminmax'][0]*ax['unit_factor']) +
+                         ', ' + self.numFormat(ax['valminmax'][1]*ax['unit_factor']) +
+                         '] ' + ax['unit_field'].text())
            else:
                 #Currently using indices, format label to match
                 lbltxt = ( ax['name'] + ': ' + 
@@ -480,8 +511,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                           ']')
            ax['label1'].setText(lbltxt)
           
-    #ACTION FUNTIONS (tied to buttons/fields/etc.)
     
+     
+     #ACTION FUNTIONS (tied to buttons/fields/etc.)
     def updateAxesFieldsAction(self):
         if self.debug:
            print("Triggered updateAxesFieldsAction")
@@ -506,8 +538,64 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            print("Triggered updateIndValToggle")
          self.updateAxesFields()
          self.makePlot()
+         
+         
+    def updateDataUnits(self):
+         try:
+              #Update the data units first
+              u = units.Unit(self.data_unit_field.text(), parse_strict='raise', format='ogip')
+              nu = units.Unit(self.data_native_unit, parse_strict='raise', format='ogip')
+              self.data_unit_factor =  ( (1 * nu).to(u) ).value 
+              self.data_unit_field.setText( u.to_string() )
+              self.makePlot()
+         except ValueError:
+              self.warninglabel.setText("WARNING: Unit string is invalid: " + str(self.data_unit_field.text()) )
+  
+    def updateAxesUnits(self):
+         try:
+              #Repeat the calculation for each axis
+              for i, ax in enumerate(self.axes):
+                   u = units.Unit(ax['unit_field'].text(), parse_strict='raise', format='ogip')
+                   nu = units.Unit(ax['native_unit'], parse_strict='raise', format='ogip')
+                   cur_unit_factor = ax['unit_factor']
+                   ax['unit_factor'] =  (1 * nu).to(u).value 
+                   ax['unit_field'].setText( u.to_string() )
+                   
+                   #Temporarily store the values so they don't get messed up
+                   val_a = ax['val_a'].value()
+                   val_b = ax['val_b'].value()
+                   
+                   #Convert the range of the value fields
+                   ax['val_a'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, ax['valminmax'][1]*ax['unit_factor'])
+                   ax['val_b'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, ax['valminmax'][1]*ax['unit_factor'])
+                   
+                   #Convert the value axis fields
+                   ax['val_a'].setValue( val_a*ax['unit_factor']/cur_unit_factor)
+                   ax['val_b'].setValue( val_b*ax['unit_factor']/cur_unit_factor)
 
+              self.updateAxesFields()
+              self.makePlot()
+         except ValueError:
+              self.warninglabel.setText("WARNING: Unit string is invalid: " + str(ax['unit_field'].text()) )
+              
+    def updateDataRange(self):
+         if self.datarange_center.isChecked():
+              self.datarange_a.setDisabled(True)
+              self.datarange_a.setValue(- self.datarange_b.value() )
+         else:
+              self.datarange_a.setDisabled(False)
+         self.makePlot()
+              
+        
 
+         
+         
+         
+         
+         
+
+    #PLOTTING ROUTINES
+    
     def validateChoices(self):
        #Make a temporary array of the axes that are ACTUALLY about to be
        #plotted (ignoring 2nd one if the plot is 2D)
@@ -604,6 +692,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             d  = self.axes[i]
             if i == ax_ind:   
                 hname = d['name']
+                h_unit = d['unit_field'].text()
+                h_unit_factor = d['unit_factor']
                 a = int(d['ind_a'].value())
                 b = int(d['ind_b'].value())
                 dslice.append( slice(a, b, 1) )
@@ -619,13 +709,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 
         with h5py.File(self.filepath, 'r') as f:
             hax = np.squeeze(f[hname][hslice])#already a tuple
-            hunit = str(f[hname].attrs['unit'])
+            hax = hax*h_unit_factor #Apply the unit conversion
+            
             
             data = f['data'][tuple(dslice)]
             if len(avg_axes) != 0:
                 data = np.mean(data, axis=tuple(avg_axes ))
             data = np.squeeze(data)
-            dataunit  = str(f['data'].attrs['unit'])
+            
+            data = data*self.data_unit_factor
+
             
 
         self.canvas_ax = self.canvas.figure.subplots()
@@ -636,8 +729,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #self.canvas_ax.text(0,1, 'THIS IS SOME SAMPLE TEXT', transform=self.canvas_ax.transAxes)
         
 
-        self.canvas_ax.set_xlabel(str(hname) + ' (' + str(hunit) + ')')
-        self.canvas_ax.set_ylabel('(' + str(dataunit) + ')')
+        self.canvas_ax.set_xlabel(str(hname) + ' (' + str(h_unit) + ')')
+        self.canvas_ax.set_ylabel('(' + str(self.data_unit_field.text()) + ')')
         
         if self.plot_title_checkbox.isChecked():
             title = self.plotTitle()
@@ -649,9 +742,18 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.canvas_ax.ticklabel_format(axis='y', scilimits=(-3,3) )
         
         #Autorange if appropriate
-        if not self.datarange_auto.isChecked():
-            self.canvas_ax.set_ylim(float(self.datarange_a.text()), float(self.datarange_b.text()))
-            
+        if self.datarange_auto.isChecked():
+             if self.datarange_center.isChecked():
+                  datamax = np.max(data)
+                  datamin = - datamax
+             else:
+                  datamax = np.max(data)
+                  datamin = np.min(data)
+                  
+        else:
+            datamin = float(self.datarange_a.text())
+            datamax = float(self.datarange_b.text())
+        self.canvas_ax.set_ylim(datamin, datamax)
         
             
         self.canvas.draw()
@@ -676,9 +778,13 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 if i == hind:
                      hname = d['name']
                      hslice = slice(a,b, 1)
+                     h_unit = d['unit_field'].text()
+                     h_unit_factor = d['unit_factor']
                 elif i == vind:
                      vname = d['name']
                      vslice = slice(a,b, 1)
+                     v_unit = d['unit_field'].text()
+                     v_unit_factor = d['unit_factor']
             
             elif d['avgcheckbox'].isChecked():
                 dslice.append( slice(None,None,None) )
@@ -690,16 +796,18 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         with h5py.File(self.filepath, 'r') as f:
             hax = np.squeeze(f[hname][hslice])#already a tuple
+            hax = hax*h_unit_factor
             vax = np.squeeze(f[vname][vslice])#already a tuple
-            hunit = f[hname].attrs['unit']
-            vunit = f[vname].attrs['unit']
+            vax = vax*v_unit_factor
+
             
             
             data = f['data'][tuple(dslice)]
             if len(avg_axes) != 0:
                 data = np.mean(data, axis=tuple(avg_axes ))
             data = np.squeeze(data)
-            dataunit  = str(f['data'].attrs['unit'])
+            
+            data = data*self.data_unit_factor
             
             
             
@@ -709,12 +817,17 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
         
         
-        if not self.datarange_auto.isChecked():
+        if self.datarange_auto.isChecked():
+            if self.datarange_center.isChecked():
+                 cmax = np.max(data)
+                 cmin = - cmax
+            else:
+                cmin = np.min(data)
+                cmax = np.max(data)
+        else:
             cmin = float(self.datarange_a.text())
             cmax = float(self.datarange_b.text())
-        else:
-            cmin = np.min(data)
-            cmax = np.max(data)
+            
             
         levels = np.linspace(cmin, cmax, num=50)
         
@@ -747,10 +860,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         cbar = self.canvas.figure.colorbar(cs, orientation='horizontal', 
                                            format=cbformat)
-        cbar.ax.set_xlabel('(' + str(dataunit) + ')' )
+        cbar.ax.set_xlabel('(' + str(self.data_unit_field.text()) + ')' )
         
-        self.canvas_ax.set_xlabel(str(hname) + ' (' + str(hunit) + ')')
-        self.canvas_ax.set_ylabel(str(vname) + ' (' + str(vunit) + ')')
+        self.canvas_ax.set_xlabel(str(hname) + ' (' + str(h_unit) + ')')
+        self.canvas_ax.set_ylabel(str(vname) + ' (' + str(v_unit) + ')')
 
         if self.plot_title_checkbox.isChecked():
             title = self.plotTitle()
@@ -777,15 +890,15 @@ class ApplicationWindow(QtWidgets.QMainWindow):
              b = int(ax['ind_b'].value())
         
              if i in self.cur_axes:
-                 val = ( self.numFormat(axarr[a]),
-                         self.numFormat(axarr[b]),
-                         ax['unit'])
+                 val = ( self.numFormat(axarr[a]*ax['unit_factor']),
+                         self.numFormat(axarr[b]*ax['unit_factor']),
+                         ax['unit_field'].text())
                  curarr.append( ax['name'] + '=[%s,%s] %s' % val )
              elif ax['avgcheckbox'].isChecked():
                  otherarr.append( ax['name'] + '= avg' )
              else:
-                 val = ( self.numFormat(axarr[a]),
-                         ax['unit'])
+                 val = ( self.numFormat(axarr[a]*ax['unit_factor']),
+                         ax['unit_field'].text())
                  otherarr.append( ax['name'] + '=%s %s' % val )
                  
         strarr.append( ', '.join(curarr) )
@@ -878,6 +991,8 @@ def format_float(value):
     string = "{:g}".format(value).replace("e+", "e")
     string = re.sub("e(-?)0*(\d+)", r"e\1\2", string)
     return string
+
+
         
         
 
