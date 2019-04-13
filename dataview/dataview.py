@@ -316,18 +316,19 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax_dict['box'].addWidget(ax_dict['label1'])
             
             ax_dict['indvalbtngrp'] = QtWidgets.QButtonGroup()
+            
+            ax_dict['valbtn'] = QtWidgets.QRadioButton("Val")
+            ax_dict['valbtn'].setChecked(True)
+            ax_dict['box'].addWidget(ax_dict['valbtn'])
+            ax_dict['indvalbtngrp'].addButton(ax_dict['valbtn'])
+            ax_dict['valbtn'].toggled.connect(self.updateIndValToggleAction)
                  
             ax_dict['indbtn'] = QtWidgets.QRadioButton("Ind")
-            ax_dict['indbtn'].setChecked(True)
+            ax_dict['indbtn'].setChecked(False)
             ax_dict['indvalbtngrp'].addButton(ax_dict['indbtn'])
             ax_dict['box'].addWidget(ax_dict['indbtn'])
             ax_dict['indbtn'].toggled.connect(self.updateIndValToggleAction)
             
-            ax_dict['valbtn'] = QtWidgets.QRadioButton("Val")
-            ax_dict['valbtn'].setChecked(False)
-            ax_dict['box'].addWidget(ax_dict['valbtn'])
-            ax_dict['indvalbtngrp'].addButton(ax_dict['valbtn'])
-            ax_dict['valbtn'].toggled.connect(self.updateIndValToggleAction)
 
             width = 80
             ax_dict['ind_a']  = ScientificDoubleSpinBox()
