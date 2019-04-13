@@ -27,7 +27,7 @@ Note: You can also directly install the dependencies by running the following co
 # Usage/Tutorial
 1) Select "Load" from the toolbar and select an HDF5 file that contains a suitable dataset.
 2) Select the horizontal axis (axis 1) from the dropdown menu to the right of the plot.
-3) Change the range of the axes plotted by changing the indices in the fields at the bottom right. Pressing Enter will refresh the plot. The arrow keys can be used to step through indices. Changing the "Step" will change the step in which you cycle through the indices. Checking "Avg" will average over the entire dimension.
+3) Change the range of the axes plotted by changing the indices in the fields at the bottom right. Pressing Enter will refresh the plot. The arrow keys can be used to step through indices. Checking "Avg" will average over the entire dimension.
 4) Autorange (bottom left) is selected by default. Select a different range and deselect this box to set your own y-axis range. 
 5) To make a 2D plot, select 2D in Plot Type (top). You can now select a second axis. Note that no plot will be made if the axes are the same!
 6) The colormap can be changed from a dropdown at the top. The default plot is a pixilated image, since that is what renders fastest. To see a nicer contour plot, select the "ContourPlot" button at the top.
