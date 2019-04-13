@@ -1,16 +1,18 @@
 import sys
 import os
+from pathlib import Path as pathlibPath
+
+#Used for sci notation spinbox
+import re
+
 import h5py
 
 import numpy as np
 
 
 from PyQt5 import QtWidgets, QtGui
-#from matplotlib.backends.qt_compat import  QtWidgets, QtGui
-
 
 import matplotlib
-matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.figure
 import matplotlib.cm
@@ -20,44 +22,54 @@ import matplotlib.cm
 
 
 class ApplicationWindow(QtWidgets.QMainWindow):
+     
     def __init__(self):
         super().__init__()
-        
+        self.debug = True
+        self.buildGUI()
+
+
+    def buildGUI(self):
         self._main = QtWidgets.QWidget()
         self.setCentralWidget(self._main)
         
-
-
+        #Playing around with a custom style sheet...
         #self.setStyleSheet(open('stylesheet.css').read())
-        
-        
-        self.dir = os.path.dirname(os.path.realpath(__file__))
-
-        iconfile = os.path.join(self.dir,'program_icon.png' )
-        self.setWindowIcon(QtGui.QIcon(iconfile))
         
         self.setWindowTitle("HEDP dataView")
         
+        #hdf5 filepath
         self.filepath = ''
     
+        #Array of axes dictionaries
         self.axes = []
-        self.plottype = 1 #1 or 2 for 1D or 2D plot
+        
+        #Currently selected axes, defaults to 0 for both
+        #Second element is only used for 2D plots
         self.cur_axes = [0,0]
-        self.avg_axes = []
-        
+      
+        #Used to smoothly transfer axes info when new files loaded  
         self.last_cur_axes = [0,0]
-        self.last_axes = []#Used to smoothly transfer axes info when new files loaded  
+        self.last_axes = []
         
+        #Data range (y values for 1D or z values for 2D)
         self.datarange = [None, None]
 
-        
+        #Semi-arbitrarily chosen subset of the mathplotlib colorsmaps to include
         self.colormap_dict = {'Autumn':'autumn', "Winter":"winter", "Cool":"cool", 
                           "Ocean":"ocean", "Rainbow":"gist_rainbow",
                           "Seismic":"seismic", "RedGrey":"RdGy",
                           "Coolwarm":"coolwarm"}
         
-
+        #Many GUI elements are connected to function calls
+        #By default, Pyqt5 will trigger these functions sometimes when we don't
+        #want it to. Elements added to this list will be temporarily
+        #disconnected at such times.
+        self.connectedList = []
+       
         
+
+        #This is the primary layout
         self.layout = QtWidgets.QHBoxLayout(self._main)
         
         #
@@ -108,17 +120,18 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.plottype_box.addWidget(self.plottype_label)
         
         self.plottype_field = QtWidgets.QComboBox()
-        self.plottype_field.currentIndexChanged.connect(self.updatePlotTypeAction)
         self.plottype_field.addItem('1D')
         self.plottype_field.addItem('2D')
         self.plottype_field.show()
         self.plottype_box.addWidget(self.plottype_field)
+        self.plottype_field.currentIndexChanged.connect(self.updatePlotTypeAction)
+        self.connectedList.append(self.plottype_field)
         
         self.plot_title_checkbox = QtWidgets.QCheckBox("Auto plot title?")
         self.plot_title_checkbox.setChecked(True)  
-        self.plot_title_checkbox.stateChanged.connect(self.makePlot)
         self.plottype_box.addWidget(self.plot_title_checkbox)
-        
+        self.plot_title_checkbox.stateChanged.connect(self.makePlot)
+        self.connectedList.append(self.plot_title_checkbox)
         
         
         self.fig_2d_props_box = QtWidgets.QHBoxLayout()
@@ -129,8 +142,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         self.plotImageBtn = QtWidgets.QRadioButton("ImagePlot")
         self.plotImageBtn.setChecked(True)
-        self.plotImageBtn.toggled.connect(self.setImageVsContour)
         self.fig_2d_props_box.addWidget(self.plotImageBtn)
+        self.plotImageBtn.toggled.connect(self.makePlot)
         
         self.plotContourBtn = QtWidgets.QRadioButton("ContourPlot")
         self.fig_2d_props_box.addWidget(self.plotContourBtn)
@@ -140,22 +153,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.fig_2d_props_box.addWidget(self.colormap_lbl)
         self.colormap_field = QtWidgets.QComboBox()
         self.fig_2d_props_box.addWidget(self.colormap_field)
-        self.colormap_field.currentIndexChanged.connect(self.makePlot)
         for k in self.colormap_dict.keys():
             self.colormap_field.addItem(k)
-            
-            
-     
+        self.colormap_field.currentIndexChanged.connect(self.makePlot)
+        self.connectedList.append(self.colormap_field)
+
+        #This label shows warnings to explain why plots weren't made
+        self.warninglabel = QtWidgets.QLabel('')
+        self.centerbox.addWidget(self.warninglabel)
         
-            
-            
-        
-        
-        
-        
-        self.toplabel = QtWidgets.QLabel('')
-        self.centerbox.addWidget(self.toplabel)
-        
+        #Create the figure that plots will be made into
         self.figure = matplotlib.figure.Figure(figsize=(5, 3))
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setMinimumSize(500, 500)
@@ -163,30 +170,30 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         
         #Create the datarange box
-        
         self.datarange_box = QtWidgets.QHBoxLayout()
         self.centerbox.addLayout(self.datarange_box)
   
         
         self.datarange_auto = QtWidgets.QCheckBox("Autorange?")
         self.datarange_auto.setChecked(True)  
-        self.datarange_auto.stateChanged.connect(self.updateDataRangeAction)
         self.datarange_box.addWidget(self.datarange_auto)
-        
+        self.datarange_auto.stateChanged.connect(self.makePlot)
 
         
         self.datarange_lbl = QtWidgets.QLabel("Data Range: ")
         self.datarange_box.addWidget(self.datarange_lbl)
         
-        self.datarange_a = QtWidgets.QDoubleSpinBox()
-        self.datarange_a.editingFinished.connect(self.updateDataRangeAction)
+        self.datarange_a = ScientificDoubleSpinBox()
         self.datarange_a.setRange(-1e100, 1e100)
         self.datarange_box.addWidget(self.datarange_a )
+        self.datarange_a.editingFinished.connect(self.makePlot)
+        self.connectedList.append(self.datarange_a)
         
-        self.datarange_b = QtWidgets.QDoubleSpinBox()
-        self.datarange_b.editingFinished.connect(self.updateDataRangeAction)
+        self.datarange_b = ScientificDoubleSpinBox()
         self.datarange_b.setRange(-1e100, 1e100)
         self.datarange_box.addWidget(self.datarange_b )
+        self.datarange_b.editingFinished.connect(self.makePlot)
+        self.connectedList.append(self.datarange_b)
         
         self.datarange_unitlbl = QtWidgets.QLabel("")
         self.datarange_box.addWidget(self.datarange_unitlbl)
@@ -201,8 +208,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.dropdown1_box.addWidget(self.dropdown1_label)
         
         self.dropdown1 = QtWidgets.QComboBox()
-        self.dropdown1.currentIndexChanged.connect(self.updateAxesFieldsAction)
         self.dropdown1_box.addWidget(self.dropdown1)
+        self.dropdown1.currentIndexChanged.connect(self.updateAxesFieldsAction)
+        self.connectedList.append(self.dropdown1)
         
         #Create the second axis dropdown menu
         self.dropdown2_box = QtWidgets.QHBoxLayout()
@@ -212,93 +220,89 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.dropdown2_box.addWidget(self.dropdown2_label)
         
         self.dropdown2 = QtWidgets.QComboBox()
-        self.dropdown2.currentIndexChanged.connect(self.updateAxesFieldsAction)
         self.dropdown2_box.addWidget(self.dropdown2)
-        
-        
-        #Create real units vs indices radio button
-        self.index_button_box = QtWidgets.QHBoxLayout()
-        self.select_ax_box.addLayout(self.index_button_box)
-        
+        self.dropdown2.currentIndexChanged.connect(self.updateAxesFieldsAction)
+        self.connectedList.append(self.dropdown2)
 
-        self.updatePlotType()
-        self.updateAxesFields()
         
         
-
+    def freezeGUI(self):
+         if self.debug:
+             print("Freezing GUI elements")
+         for elm in self.connectedList:
+              elm.blockSignals(True)
+    def unfreezeGUI(self):
+        if self.debug:
+             print("Unfreezing GUI elements")
+        for elm in self.connectedList:
+              elm.blockSignals(False)
         
 
     def fileDialog(self):
-        self.last_axes = self.axes #Copy over any axes to memory
-        self.axes = []
-        
-        self.avg_axes = []
-
-        self.last_cur_axes = self.cur_axes
-        self.cur_axes = (0,)
-        
-        
-        print("load")
+        if self.debug:
+             print("Beginning file dialog")
         opendialog = QtWidgets.QFileDialog()
         opendialog.setNameFilter("HDF5 Files (*.hf5, *.h5)")
-        self.filepath = opendialog.getOpenFileName(self, "Select file to open", "", "hdf5 Files (*.hdf5)")[0]
-        print(self.filepath)
-  
-        with h5py.File(self.filepath, 'r') as f:
-            temp_axes = ( f['data'].attrs['dimensions'] ) 
-            dataunit = f['data'].attrs['unit']
-            
-            self.datarange_unitlbl.setText(dataunit)
-           
-            for ind, ax in enumerate(temp_axes):
-                ax_dict = {}
-                name = ax.decode("utf-8")
-                ax_dict['name'] =  name
-                ax_dict['ax'] = f[name][:]
-                ax_dict['ind'] = ind
-                ax_dict['unit'] = f[name].attrs['unit']
-                ax_dict['valrange'] = ( f[name][0] , f[name][-1] )
-                ax_dict['indrange'] = ( 0 ,  len(f[name]) -1 )
+        userinput = pathlibPath( opendialog.getOpenFileName(self, "Select file to open", "", "hdf5 Files (*.hdf5)")[0] )
+        
+        if not userinput.is_file():
+             print("Invalid input (ignoring): " + str(userinput) )
                 
-                try:
-                    ax_dict['step'] = np.mean(np.gradient(ax_dict['ax']))
-                except ValueError:
-                    ax_dict['step'] = 1
+        else:
+             print("Loading file: " + str(userinput) )
+             self.filepath = userinput
+             
+             #Saving old settings and resetting arrays to default
+             self.last_axes = self.axes #Copy over any axes to memory
+             self.axes = []
+             self.last_cur_axes = self.cur_axes
+             self.cur_axes = (0,)
+             
+             with h5py.File(self.filepath, 'r') as f:
+                  temp_axes = ( f['data'].attrs['dimensions'] ) 
+                  dataunit = f['data'].attrs['unit']
+                  self.datarange_unitlbl.setText(dataunit)
+                  
+                  for ind, ax in enumerate(temp_axes):
+                     ax_dict = {}
+                     name = ax.decode("utf-8")
+                     ax_dict['name'] =  name
+                     ax_dict['ax'] = f[name][:]
+                     ax_dict['axind'] = ind
+                     ax_dict['unit'] = f[name].attrs['unit']
+                     
+                     ax_dict['indminmax'] = ( 0 ,  len(f[name]) -1 )
+                     #ax_dict['indrange'] = ax_dict['indminmax']
+                     ax_dict['valminmax'] = ( f[name][0] , f[name][-1] )
+                     #ax_dict['valrange'] = ax_dict['valminmax'] 
+                     
+                     try:
+                         ax_dict['step'] = np.mean(np.gradient(ax_dict['ax']))
+                     except ValueError:
+                         ax_dict['step'] = 1
+                         
+                     self.axes.append(ax_dict)
+                    
+             self.freezeGUI()
+             self.initAxesBoxes()
+             self.unfreezeGUI()
 
-                
-                self.axes.append(ax_dict)
-                
-        self.fillAxesBox()
-        self.updatePlotType()
-        self.updateAxesFields()
-            
-    
-    def fillAxesBox(self):
 
+    def initAxesBoxes(self):
+        if self.debug:
+             print("Initializing Axes Boxes")
         #Remove old widgets
         self.clearLayout(self.axesbox)
+        
         
         #Remove old items from dropdown menus
         self.dropdown1.clear()
         self.dropdown2.clear()
 
-        
         for i, ax in enumerate(self.axes):
             #Take the ax_dict out of the axes array
             ax_dict = self.axes[i]
             
-            ax_dict['ind_lbl']=  (str(ax_dict['name']) + ' -> ' + 
-                   'Indices: [' + 
-                   str(int(ax_dict['indrange'][0])) + ',' + 
-                   str(int(ax_dict['indrange'][1])) + ']' )
-    
-            
-            v1 = self.numFormat(ax_dict['valrange'][0])
-            v2 = self.numFormat(ax_dict['valrange'][1])
-            ax_dict['val_lbl'] =  ('Values: [' + 
-                    v1 + ',' + v2 + '] ' +
-                    ax_dict['unit'])
-   
             #Add the axes names to the dropdown menus
             self.dropdown1.addItem(ax_dict['name'])
             self.dropdown2.addItem(ax_dict['name'])
@@ -307,45 +311,68 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             self.axesbox.addLayout(ax_dict['box'])
   
 
-            ax_dict['label1']  = QtWidgets.QLabel( ax_dict['ind_lbl'] )  
+            ax_dict['label1']  = QtWidgets.QLabel('')  
             ax_dict['label1'].setFixedWidth(160)
             ax_dict['box'].addWidget(ax_dict['label1'])
             
+            ax_dict['indvalbtngrp'] = QtWidgets.QButtonGroup()
+                 
+            ax_dict['indbtn'] = QtWidgets.QRadioButton("Ind")
+            ax_dict['indbtn'].setChecked(True)
+            ax_dict['indvalbtngrp'].addButton(ax_dict['indbtn'])
+            ax_dict['box'].addWidget(ax_dict['indbtn'])
+            ax_dict['indbtn'].toggled.connect(self.updateIndValToggleAction)
+            
+            ax_dict['valbtn'] = QtWidgets.QRadioButton("Val")
+            ax_dict['valbtn'].setChecked(False)
+            ax_dict['box'].addWidget(ax_dict['valbtn'])
+            ax_dict['indvalbtngrp'].addButton(ax_dict['valbtn'])
+            ax_dict['valbtn'].toggled.connect(self.updateIndValToggleAction)
 
             width = 80
-            ax_dict['field1']  = QtWidgets.QSpinBox()
-            ax_dict['field1'].editingFinished.connect(self.updateAxesFieldsAction)
-            ax_dict['field1'].setRange(ax_dict['indrange'][0],ax_dict['indrange'][1])
-            ax_dict['field1'].setSingleStep(1)
-            ax_dict['field1'].setFixedWidth(width)
-            ax_dict['field1'].setWrapping(True)
-            ax_dict['box'].addWidget(ax_dict['field1'])
-        
-            ax_dict['field2']  = QtWidgets.QSpinBox()
-            ax_dict['field2'].editingFinished.connect(self.updateAxesFieldsAction)
-            ax_dict['field2'].setRange(ax_dict['indrange'][0],ax_dict['indrange'][1])
-            ax_dict['field2'].setSingleStep(1)
-            ax_dict['field2'].setFixedWidth(width)
-            ax_dict['field2'].setWrapping(True)
-            ax_dict['field2'].setValue(ax_dict['indrange'][1])
-            ax_dict['box'].addWidget(ax_dict['field2'])
+            ax_dict['ind_a']  = ScientificDoubleSpinBox()
+            ax_dict['ind_a'].setRange(ax_dict['indminmax'][0], ax_dict['indminmax'][1])
+            ax_dict['ind_a'].setSingleStep(1)
+            ax_dict['ind_a'].setFixedWidth(width)
+            ax_dict['ind_a'].setValue(0)
+            ax_dict['ind_a'].setWrapping(True)
+            ax_dict['box'].addWidget(ax_dict['ind_a'])
+            ax_dict['ind_a'].editingFinished.connect(self.updateAxesFieldsAction)
             
-            ax_dict['label3']  = QtWidgets.QLabel( " Step size: " )  
-            ax_dict['box'].addWidget(ax_dict['label3'])
+            ax_dict['val_a']  = ScientificDoubleSpinBox()
+            ax_dict['val_a'].setRange(ax_dict['valminmax'][0], ax_dict['valminmax'][1])
+            #ax_dict['val_a'].setSingleStep(ax_dict['step'])
+            ax_dict['val_a'].setFixedWidth(width)
+            ax_dict['val_a'].setValue(0)
+            ax_dict['val_a'].setWrapping(True)
+            ax_dict['box'].addWidget(ax_dict['val_a'])
+            ax_dict['val_a'].editingFinished.connect(self.updateAxesFieldsAction)
             
-            ax_dict['field3']  = QtWidgets.QSpinBox()
-            ax_dict['field3'].editingFinished.connect(self.updateAxesFieldStepAction )
-            ax_dict['field3'].setRange(1,ax_dict['indrange'][1]-1)
-            ax_dict['field3'].setSingleStep(1)
-            ax_dict['field3'].setFixedWidth(60)
-            ax_dict['box'].addWidget(ax_dict['field3'])
+            
+            ax_dict['ind_b']  = ScientificDoubleSpinBox()
+            ax_dict['ind_b'].setRange(ax_dict['indminmax'][0], ax_dict['indminmax'][1])
+            ax_dict['ind_b'].setSingleStep(1)
+            ax_dict['ind_b'].setFixedWidth(width)
+            ax_dict['ind_b'].setValue(ax_dict['indminmax'][1])
+            ax_dict['ind_b'].setWrapping(True)
+            ax_dict['box'].addWidget(ax_dict['ind_b'])
+            ax_dict['ind_b'].editingFinished.connect(self.updateAxesFieldsAction)
+            
+            ax_dict['val_b']  = ScientificDoubleSpinBox()
+            ax_dict['val_b'].setRange(ax_dict['valminmax'][0], ax_dict['valminmax'][1])
+            #ax_dict['val_b'].setSingleStep(ax_dict['step'])
+            ax_dict['val_b'].setFixedWidth(width)
+            ax_dict['val_b'].setValue(ax_dict['valminmax'][1])
+            ax_dict['val_b'].setWrapping(True)
+            ax_dict['box'].addWidget(ax_dict['val_b'])
+            ax_dict['val_b'].editingFinished.connect(self.updateAxesFieldsAction)
+            
             
             ax_dict['avgcheckbox'] = QtWidgets.QCheckBox("Avg")
             ax_dict['avgcheckbox'].setChecked(False)  
-            ax_dict['avgcheckbox'].stateChanged.connect(self.updateAvgCheckBoxAction)
             ax_dict['box'].addWidget(ax_dict['avgcheckbox'])
+            ax_dict['avgcheckbox'].stateChanged.connect(self.updateAvgCheckBoxAction)
             
-
             #Put the ax_dict back into the axes array
             self.axes[i] = ax_dict
         
@@ -354,11 +381,13 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         for i, ax in enumerate(self.axes):
             for j, old_ax in enumerate(self.last_axes):
                 if ax['name'] == old_ax['name']:
-                    ax['field1'].setValue( old_ax['field1'].value() )
-                    ax['field2'].setValue( old_ax['field2'].value() )
-                    
-        #If new axes match old ones, set the indices so the axes stay
-        #the same
+                    ax['ind_a'].setValue( old_ax['ind_a'].value() )
+                    ax['ind_b'].setValue( old_ax['ind_b'].value() )
+                    ax['val_a'].setValue( old_ax['val_a'].value() )
+                    ax['val_b'].setValue( old_ax['val_b'].value() )
+    
+ 
+        #If new axes match old ones, set the cur_axes to match
         if len(self.last_axes) != 0:
             cur_name = self.last_axes[ self.last_cur_axes[0] ]['name']
             ind = self.dropdown1.findText(cur_name)
@@ -369,150 +398,176 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ind = self.dropdown2.findText(cur_name)
             if ind != -1:
                 self.dropdown2.setCurrentIndex(ind)
-
-        
-        
-            
-            
-    def updatePlotType(self):
-        ind = self.plottype_field.currentIndex()
-        if ind == 0:
-            self.plottype = 1
-            try:
-                self.dropdown2_label.hide()
-                self.dropdown2.hide()
-            except AttributeError as e:
-                pass
-            
-        elif ind == 1:
-            self.plottype = 2
-            try:
-                self.dropdown2_label.show()
-                self.dropdown2.show()
-            except AttributeError as e:
-                pass
-
-        
-    def updatePlotTypeAction(self):
-        self.updatePlotType()
+                
+        #Once all the fields have been created, make sure they are set correctly
         self.updateAxesFields()
-        self.makePlot()
 
-    def updateAxesFieldStepAction(self):
-        for i, ax in enumerate(self.axes):
-            step = self.axes[i]['field3'].value()
-            self.axes[i]['field1'].setSingleStep(step)
-            self.axes[i]['field2'].setSingleStep(step)
 
     def updateAxesFields(self):
-        try:
-            if self.plottype == 1:
-                self.cur_axes = (self.dropdown1.currentIndex(), )
-            elif self.plottype ==2:
-                self.cur_axes = (self.dropdown1.currentIndex(), self.dropdown2.currentIndex())
-            
-            self.avg_axes = []
-            for i, ax in enumerate(self.axes):
-                #This if statement to catch if axes not init yet
-                if  'field2' in ax.keys():
-                    if  ax['avgcheckbox'].isChecked()==False :
-                         ax['field1'].setDisabled(False)
-                    else:
-                         self.avg_axes.append(i)
-                         ax['field1'].setDisabled(True)
-                        
-                    if i in self.cur_axes and ax['avgcheckbox'].isChecked()==False :
-                            ax['field2'].setDisabled(False)
-                    else:
-                        ax['field2'].setDisabled(True)
-                    
-        except AttributeError:
-            pass
-        
-    def updateAxesFieldsAction(self):
-        self.updateAxesFields()
-        self.makePlot()
-        
-        
-    def updateAvgCheckBoxAction(self):
-        self.updateAxesFields()
-        self.makePlot()
-        
-        
-    def updateDataRange(self):
-        try:
-            self.datarange[0] = float(self.datarange_a.text())
-            self.datarange[1] = float(self.datarange_b.text())
-        except AttributeError:
-            pass
-        
-    def updateDataRangeAction(self):
-        self.updateDataRange()
-        self.makePlot()
-        
-        
-    def updateAxRange(self):
-        pass
-        
-        
-    def updateAxRangeAction(self):
-        self.updateAxRange()
-        self.makePlot()
+       if self.debug:
+           print("Updating Axes Fields and Check Boxes")
+       #Update based on how the plottype is set currently
+       if self.plottype_field.currentIndex() == 0:
+           self.cur_axes = (self.dropdown1.currentIndex(), )
+           self.dropdown2_label.hide()
+           self.dropdown2.hide()
+       elif self.plottype_field.currentIndex() == 1:
+           self.cur_axes = (self.dropdown1.currentIndex(), self.dropdown2.currentIndex())
+           self.dropdown2_label.show()
+           self.dropdown2.show()
+           
+       #Update each of the axes fields visibility based on field settings
+       for i, ax in enumerate(self.axes):
+           #Enable/Disable fields as appropriate
+           #a is disabled only if the avg box is checked
+           is_avg = ax['avgcheckbox'].isChecked()
+           ax['ind_a'].setDisabled(is_avg)
+           ax['val_a'].setDisabled(is_avg)
+           #b is only enabled when it is the current axis AND not averaged
+           if i in self.cur_axes and ax['avgcheckbox'].isChecked()==False :
+               ax['ind_b'].setDisabled(False)
+               ax['val_b'].setDisabled(False)
+           else:
+               ax['ind_b'].setDisabled(True)
+               ax['val_b'].setDisabled(True) 
+               
+           #Hide or show fields based on index/value mode
+           if ax['valbtn'].isChecked():
+                ax['ind_a'].hide()
+                ax['ind_b'].hide()
+                ax['val_a'].show()
+                ax['val_b'].show()
+           elif ax['indbtn'].isChecked():
+                ax['val_a'].hide()
+                ax['val_b'].hide()
+                ax['ind_a'].show()
+                ax['ind_b'].show()
 
-        
-
-        
-    def validateChoices(self):
-        #Try statement catches attribute error for if any of these
-        #aren't defined yet
-        try:
-            
-            #Validate file
-            if not os.path.isfile(self.filepath):
-                self.toplabel.setText("WARNING: Invalid filepath!")
-                return False
-            elif os.path.splitext(self.filepath)[-1] != '.hdf5':
-                self.toplabel.setText("WARNING: Filepath must end in .hdf5!")
-                return False
-            
-            #Validate plot params
-            if  self.plottype == 2 and self.dropdown1.currentIndex() == self.dropdown2.currentIndex():
-                self.toplabel.setText("WARNING: Axes selected need to be different!")
-                return False
-            
-            if len(self.axes) == 0:
-                return False
-
-            for ind, ax_dict in enumerate(self.axes):
-                if ind in self.cur_axes:
-                    if ax_dict['field1'].text()  == ax_dict['field2'].text():
-                        self.toplabel.setText("WARNING: Axes range is 0!")
-                        return False
-                    elif int(ax_dict['field1'].text())  > int(ax_dict['field2'].text()):
-                        self.toplabel.setText("WARNING: First range element should be smallest!")
-                        return False
                 
-            self.toplabel.setText("")
-        except (AttributeError, KeyError):
-            return False
-        
-        
-        return True
+               
+           #Calculate the indices or values...
+           #whichever we aren't controlling right now
+           if ax['valbtn'].isChecked():
+                val_a = float(ax['val_a'].value())
+                val_b = float(ax['val_b'].value())
+                ind_a = np.argmin(np.abs(ax['ax'] - val_a ))
+                ind_b = np.argmin(np.abs(ax['ax'] - val_b ))
+                ax['ind_a'].setValue(ind_a)
+                ax['ind_b'].setValue(ind_b)
+
+           elif ax['indbtn'].isChecked():
+                ind_a = int(ax['ind_a'].value())
+                ind_b = int(ax['ind_b'].value())
+                val_a = ax['ax'][ind_a]
+                val_b = ax['ax'][ind_b]
+                ax['val_a'].setValue(val_a)
+                ax['val_b'].setValue(val_b)
+                
+               
+           #Update the label for each line
+           if ax['valbtn'].isChecked():
+               #Currently using values, format label to match
+               lbltxt = ( ax['name'] + ': ' +
+                         'Values [' + self.numFormat(ax['valminmax'][0]) +
+                         ', ' + self.numFormat(ax['valminmax'][1]) +
+                         '] ' + ax['unit'])
+           else:
+                #Currently using indices, format label to match
+                lbltxt = ( ax['name'] + ': ' + 
+                          'Indices [' + self.numFormat(ax['indminmax'][0]) +
+                          ', ' + self.numFormat(ax['indminmax'][1]) +
+                          ']')
+           ax['label1'].setText(lbltxt)
+          
+    #ACTION FUNTIONS (tied to buttons/fields/etc.)
     
-    
-    def setImageVsContour(self):
+    def updateAxesFieldsAction(self):
+        if self.debug:
+           print("Triggered updateAxesFieldsAction")
+        self.updateAxesFields()
         self.makePlot()
     
+    def updatePlotTypeAction(self):
+        if self.debug:
+             print("Triggered updatePlotTypeActio")
+        self.updateAxesFields()
+        self.makePlot()
 
-
+    def updateAvgCheckBoxAction(self):
+        if self.debug:
+           print("Triggered updateAvgCheckBoxAction")
+        self.updateAxesFields()
+        self.makePlot()
         
         
+    def updateIndValToggleAction(self):
+         if self.debug:
+           print("Triggered updateIndValToggle")
+         self.updateAxesFields()
+         self.makePlot()
+
+
+    def validateChoices(self):
+       #Make a temporary array of the axes that are ACTUALLY about to be
+       #plotted (ignoring 2nd one if the plot is 2D)
+       if self.plottype_field.currentIndex() == 0:
+            thisplot_axes = [self.axes[0]]
+       elif self.plottype_field.currentIndex() == 1:
+            thisplot_axes = self.axes
+      
+         
+       #Validate file
+       if not os.path.isfile(self.filepath):
+           self.warninglabel.setText("WARNING: Invalid filepath!")
+           return False
+       elif os.path.splitext(self.filepath)[-1] != '.hdf5':
+           self.warninglabel.setText("WARNING: Filepath must end in .hdf5!")
+           return False
+      
+       #Validate plot params
+       #Selected axes should be different
+       if  self.plottype_field.currentIndex() == 1 and self.dropdown1.currentIndex() == self.dropdown2.currentIndex():
+           self.warninglabel.setText("WARNING: Axes selected need to be different!")
+           return False
+      
+       #Current axes should be larger than 1D
+       for axind in self.cur_axes:
+           ax = self.axes[axind]
+           #Check that the original axis is is > 1 long
+           l = ax['ax'].shape[0]
+           print(l)
+           if l > 1:
+               pass
+           else:
+               self.warninglabel.setText("WARNING: Axis must have length > 1: " + str(ax['name']))
+               return False
+          #Check to make sure it hasn't been TRIMMED to be < 2
+          
+       
+
+       #Check to make sure the axes make sense
+       for ind, ax_dict in enumerate(self.axes):
+           if ind in thisplot_axes:
+               if ax_dict['ind_a'].text()  == ax_dict['ind_b'].text():
+                   self.warninglabel.setText("WARNING: Axes range is 0!")
+                   return False
+               elif float(ax_dict['ind_a'].text())  > float(ax_dict['ind_b'].text()):
+                   self.warninglabel.setText("WARNING: First range element should be smallest!")
+                   return False
+              
+       #If no warnings are found, set the label to blank and return True
+       self.warninglabel.setText("")
+       return True
+    
+    
+
+
     def makePlot(self):
         self.clearCanvas()
         if self.validateChoices():
-            if self.plottype == 1:
+            if self.plottype_field.currentIndex() == 0:
                 self.plot1D()
-            elif self.plottype == 2:
+            elif self.plottype_field.currentIndex() == 1:
                 self.plot2D()
 
             
@@ -541,24 +596,25 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         #Horizontal axis for this 1D plot - obj
         ax_ind = self.cur_axes[0]
-
+        avg_axes = []
         dslice = []
         
-        print(self.avg_axes)
+
         for i in range(len(self.axes) ):
             d  = self.axes[i]
             if i == ax_ind:   
                 hname = d['name']
-                a = int(d['field1'].text())
-                b = int(d['field2'].text())
+                a = int(d['ind_a'].value())
+                b = int(d['ind_b'].value())
                 dslice.append( slice(a, b, 1) )
                 hslice = slice(a,b, 1)
                 
-            elif i  in self.avg_axes:
+            elif d['avgcheckbox'].isChecked():
                 dslice.append( slice(None,None,None) )
+                avg_axes.append(i)
 
             else:
-                a = int(d['field1'].text())
+                a = int(d['ind_a'].text())
                 dslice.append( slice(a, a+1, 1) )
                 
         with h5py.File(self.filepath, 'r') as f:
@@ -566,15 +622,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             hunit = str(f[hname].attrs['unit'])
             
             data = f['data'][tuple(dslice)]
-            if len(self.avg_axes) != 0:
-                data = np.mean(data, axis=tuple(self.avg_axes ))
+            if len(avg_axes) != 0:
+                data = np.mean(data, axis=tuple(avg_axes ))
             data = np.squeeze(data)
             dataunit  = str(f['data'].attrs['unit'])
-            
-            
-            
-        
-            
             
 
         self.canvas_ax = self.canvas.figure.subplots()
@@ -584,8 +635,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         #self.canvas_ax.text(0,1, 'THIS IS SOME SAMPLE TEXT', transform=self.canvas_ax.transAxes)
         
-        
-        
+
         self.canvas_ax.set_xlabel(str(hname) + ' (' + str(hunit) + ')')
         self.canvas_ax.set_ylabel('(' + str(dataunit) + ')')
         
@@ -600,7 +650,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         #Autorange if appropriate
         if not self.datarange_auto.isChecked():
-            self.canvas_ax.set_ylim(self.datarange[0], self.datarange[1])
+            self.canvas_ax.set_ylim(float(self.datarange_a.text()), float(self.datarange_b.text()))
             
         
             
@@ -614,27 +664,29 @@ class ApplicationWindow(QtWidgets.QMainWindow):
   
         dslice = []
         
+        avg_axes = []
+        
         for i in range(len(self.axes) ):
             d  = self.axes[i]
-            if i == hind:
-                hname = d['name']
-                a = int(d['field1'].text())
-                b = int(d['field2'].text())
+            if i == hind or i == vind:
+                a = int(d['ind_a'].value())
+                b = int(d['ind_b'].value())
                 dslice.append( slice(a, b, 1) )
-                hslice = slice(a,b, 1)
-            elif i == vind:
-                vname = d['name']
-                a = int(d['field1'].text())
-                b = int(d['field2'].text())
-                dslice.append( slice(a, b, 1) )
-                vslice = slice(a,b, 1)
                 
-            elif i  in self.avg_axes:
+                if i == hind:
+                     hname = d['name']
+                     hslice = slice(a,b, 1)
+                elif i == vind:
+                     vname = d['name']
+                     vslice = slice(a,b, 1)
+            
+            elif d['avgcheckbox'].isChecked():
                 print(str(i) + ' is in avg_axes')
                 dslice.append( slice(None,None,None) )
+                avg_axes.append(i)
                 
             else:
-                a = int(d['field1'].text())
+                a = int(d['ind_a'].value())
                 dslice.append( slice(a, a+1, 1) )
         
         with h5py.File(self.filepath, 'r') as f:
@@ -645,8 +697,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
             
             data = f['data'][tuple(dslice)]
-            if len(self.avg_axes) != 0:
-                data = np.mean(data, axis=tuple(self.avg_axes ))
+            if len(avg_axes) != 0:
+                data = np.mean(data, axis=tuple(avg_axes ))
             data = np.squeeze(data)
             dataunit  = str(f['data'].attrs['unit'])
             
@@ -659,8 +711,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         
         if not self.datarange_auto.isChecked():
-            cmin = self.datarange[0]
-            cmax = self.datarange[1]
+            cmin = float(self.datarange_a.text())
+            cmax = float(self.datarange_b.text())
         else:
             cmin = np.min(data)
             cmax = np.max(data)
@@ -720,15 +772,20 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         for i, ax in enumerate(self.axes):
              axarr = ax['ax']
+             
+     
+             a = int(ax['ind_a'].value())
+             b = int(ax['ind_b'].value())
+        
              if i in self.cur_axes:
-                 val = ( self.numFormat(axarr [ ax['field1'].value() ]),
-                         self.numFormat(axarr[ ax['field2'].value()]),
+                 val = ( self.numFormat(axarr[a]),
+                         self.numFormat(axarr[b]),
                          ax['unit'])
                  curarr.append( ax['name'] + '=[%s,%s] %s' % val )
-             elif i in self.avg_axes:
+             elif ax['avgcheckbox'].isChecked():
                  otherarr.append( ax['name'] + '= avg' )
              else:
-                 val = ( self.numFormat(axarr [ ax['field1'].value() ]),
+                 val = ( self.numFormat(axarr[a]),
                          ax['unit'])
                  otherarr.append( ax['name'] + '=%s %s' % val )
                  
@@ -756,9 +813,72 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             return '%.2E' % n
         else:
             return '%.2f' % n
-        
-        
-        
+     
+     
+     
+# This website helped with code for the scientific notation QSpinBox   
+# https://jdreaver.com/posts/2014-07-28-scientific-notation-spin-box-pyside.html         
+# Regular expression to find floats. Match groups are the whole string, the
+# whole coefficient, the decimal part of the coefficient, and the exponent
+# part.
+_float_re = re.compile(r'(([+-]?\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?)')
+
+def valid_float_string(string):
+    match = _float_re.search(string)
+    return match.groups()[0] == string if match else False
+
+
+class FloatValidator(QtGui.QValidator):
+
+    def validate(self, string, position):
+        if valid_float_string(string):
+            state = QtGui.QValidator.Acceptable
+        elif string == "" or string[position-1] in 'e.-+':
+            state = QtGui.QValidator.Intermediate
+        else:
+            state = QtGui.QValidator.Invalid
+        return (state, string, position)
+   
+    def fixup(self, text):
+        match = _float_re.search(text)
+        return match.groups()[0] if match else ""
+
+
+class ScientificDoubleSpinBox(QtWidgets.QDoubleSpinBox):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        #self.setMinimum(-np.inf)
+        #self.setMaximum(np.inf)
+        self.validator = FloatValidator()
+        self.setDecimals(1000)
+
+    def validate(self, text, position):
+        return self.validator.validate(text, position)
+
+    def fixup(self, text):
+        return self.validator.fixup(text)
+
+    def valueFromText(self, text):
+        return float(text)
+
+    def textFromValue(self, value):
+        return format_float(value)
+
+    def stepBy(self, steps):
+        text = self.cleanText()
+        groups = _float_re.search(text).groups()
+        decimal = float(groups[1])
+        decimal += steps
+        new_string = "{:g}".format(decimal) + (groups[3] if groups[3] else "")
+        self.lineEdit().setText(new_string)
+
+
+def format_float(value):
+    """Modified form of the 'g' format specifier."""
+    string = "{:g}".format(value).replace("e+", "e")
+    string = re.sub("e(-?)0*(\d+)", r"e\1\2", string)
+    return string
         
         
 
