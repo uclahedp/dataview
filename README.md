@@ -35,4 +35,6 @@ Note: You can also directly install the dependencies by running the following co
 
 You can switch to a new HDF5 file without restarting the program by pressing Load again. The program will its best to apply the settings you had on the previous file to plot the new file, so if datafiles are similar you can easily create the same plot in each one.
 
-
+# Units
+dataview can understand and convert between units as long as the conform to the OGIP unit string convention:
+https://heasarc.gsfc.nasa.gov/docs/heasarc/ofwg/docs/general/ogip_93_001/
