@@ -416,8 +416,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                     ax['ind_a'].setValue( old_ax['ind_a'].value() )
                     ax['ind_b'].setValue( old_ax['ind_b'].value() )
                     
-                    #ax['val_a'].setValue( old_ax['val_a'].value() )
-                    #ax['val_b'].setValue( old_ax['val_b'].value() )
+                    ax['val_a'].setValue( old_ax['val_a'].value() )
+                    ax['val_b'].setValue( old_ax['val_b'].value() )
                     
                     ax['unit_factor'] =  old_ax['unit_factor']
                     ax['unit_field'].setText(old_ax['unit_field'].text())
@@ -597,22 +597,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                        val_b = ax['val_b'].value()
                        
                        mod_uf = new_uf/old_uf
-                       
-                       print(ax['valminmax'][1])
-                       
-                       
+
                        #These are modified just by the new_uf,
                        #because they are stored always in native units
                        valmin = ax['valminmax'][0]*new_uf
                        valmax = ax['valminmax'][1]*new_uf
-                       
-                       print(valmax)
-                       
-                       print(new_uf)
-                       print(old_uf)
-                       print(mod_uf)
-                       print(valmin)
-                       print(valmax)
+
     
                        #Convert the range of the value fields
                        ax['val_a'].setRange(valmin, valmax)
@@ -1032,7 +1022,7 @@ class ScientificDoubleSpinBox(QtWidgets.QDoubleSpinBox):
         text = self.cleanText()
         groups = _float_re.search(text).groups()
         decimal = float(groups[1])
-        decimal += steps*self.stepsize
+        decimal += steps
         new_string = "{:g}".format(decimal) + (groups[3] if groups[3] else "")
         self.lineEdit().setText(new_string)
 
@@ -1043,9 +1033,6 @@ def format_float(value):
     string = re.sub("e(-?)0*(\d+)", r"e\1\2", string)
     return string
 
-
-        
-        
 
 if __name__ == "__main__":
     
