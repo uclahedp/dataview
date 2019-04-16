@@ -11,7 +11,7 @@ import numpy as np
 
 from astropy import units
 
-from PyQt5 import QtWidgets, QtGui
+from PyQt5 import QtWidgets, QtGui, QtCore
 
 import matplotlib
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -30,6 +30,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     def buildGUI(self):
         self._main = QtWidgets.QWidget()
         self.setCentralWidget(self._main)
+        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         
         #Playing around with a custom style sheet...
         #self.setStyleSheet(open('stylesheet.css').read())
@@ -181,12 +182,13 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.datarange_auto.setChecked(True)  
         self.datarange_box.addWidget(self.datarange_auto)
         self.datarange_auto.stateChanged.connect(self.updateDataRange)
+        self.connectedList.append(self.datarange_auto)
         
         self.datarange_center = QtWidgets.QCheckBox("Center zero?")
         self.datarange_center.setChecked(False)  
         self.datarange_box.addWidget(self.datarange_center)
         self.datarange_center.stateChanged.connect(self.updateDataRange)
-
+        self.connectedList.append(self.datarange_center)
         
         self.datarange_lbl = QtWidgets.QLabel("Data Range: ")
         self.datarange_lbl.setFixedWidth(80)
@@ -588,11 +590,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
               
         
 
-         
-         
-         
-         
-         
+
 
     #PLOTTING ROUTINES
     
@@ -600,9 +598,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
        #Make a temporary array of the axes that are ACTUALLY about to be
        #plotted (ignoring 2nd one if the plot is 2D)
        if self.plottype_field.currentIndex() == 0:
-            thisplot_axes = [self.axes[0]]
+            thisplot_axes = [self.cur_axes[0]]
        elif self.plottype_field.currentIndex() == 1:
-            thisplot_axes = self.axes
+            thisplot_axes = self.cur_axes
       
          
        #Validate file
@@ -619,44 +617,35 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            self.warninglabel.setText("WARNING: Axes selected need to be different!")
            return False
       
-       #Current axes should be larger than 1D
-       for axind in self.cur_axes:
-           ax = self.axes[axind]
-           #Check that the original axis is is > 1 long
-           l = ax['ax'].shape[0]
-           if l > 1:
-               pass
-           else:
-               self.warninglabel.setText("WARNING: Axis must have length > 1: " + str(ax['name']))
-               return False
-          #Check to make sure it hasn't been TRIMMED to be < 2
-          
-       
-
        #Check to make sure the axes make sense
-       for ind, ax_dict in enumerate(self.axes):
+       for ind, ax in enumerate(self.axes):
            if ind in thisplot_axes:
-               if ax_dict['ind_a'].text()  == ax_dict['ind_b'].text():
-                   self.warninglabel.setText("WARNING: Axes range is 0!")
+               a = int(ax['ind_a'].value())
+               b = int(ax['ind_b'].value())
+               #Range should not be zero!
+               if np.abs(b - a) < 2:
+                   self.warninglabel.setText("WARNING: Axes range is must be greater than 2!")
                    return False
-               elif float(ax_dict['ind_a'].text())  > float(ax_dict['ind_b'].text()):
+               #Order of elements in range should be correct!
+               elif a  > b:
                    self.warninglabel.setText("WARNING: First range element should be smallest!")
                    return False
-              
+
        #If no warnings are found, set the label to blank and return True
        self.warninglabel.setText("")
        return True
     
-    
-
 
     def makePlot(self):
         self.clearCanvas()
-        if self.validateChoices():
-            if self.plottype_field.currentIndex() == 0:
-                self.plot1D()
-            elif self.plottype_field.currentIndex() == 1:
-                self.plot2D()
+        try:
+            if self.validateChoices():
+                if self.plottype_field.currentIndex() == 0:
+                    self.plot1D()
+                elif self.plottype_field.currentIndex() == 1:
+                    self.plot2D()
+        except ValueError as e:
+            print("Value Error!: " + str(e))
 
             
             
@@ -1006,7 +995,7 @@ if __name__ == "__main__":
     else:
         #print('QApplication instance already exists: %s' % str(app))
         pass
-    
+
     w = ApplicationWindow()
     w.show()
     app.exec()
