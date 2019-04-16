@@ -23,7 +23,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
      
     def __init__(self):
         super().__init__()
-        self.debug = False
+        self.debug = True
         self.buildGUI()
 
 
@@ -70,6 +70,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.data_native_unit = ''
         #Factor for correcting data for units
         self.data_unit_factor = 1.0
+        #Storage of unit factor currently applied to data range
+        self.data_cur_unit = ''#Unit displayed on data range, etc.
         
         
 
@@ -280,6 +282,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                   
                   self.data_unit_field.setText( f['data'].attrs['unit'] )
                   self.data_native_unit = self.data_unit_field.text()
+                  self.data_cur_unit = self.data_native_unit
 
                   
                   for ind, ax in enumerate(temp_axes):
@@ -390,6 +393,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
             
             ax_dict['unit_factor'] = 1.0
+            ax_dict['cur_unit'] = ax_dict['native_unit']
             ax_dict['unit_field'] = QtWidgets.QLineEdit(str(ax_dict['native_unit']))
             ax_dict['unit_field'].setFixedWidth(40)
             ax_dict['box'].addWidget(ax_dict['unit_field'])
@@ -412,8 +416,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                     ax['ind_a'].setValue( old_ax['ind_a'].value() )
                     ax['ind_b'].setValue( old_ax['ind_b'].value() )
                     
-                    ax['val_a'].setRange(old_ax['val_a'].minimum(), old_ax['val_a'].maximum())
-                    ax['val_b'].setRange(old_ax['val_b'].minimum(), old_ax['val_b'].maximum())
                     ax['val_a'].setValue( old_ax['val_a'].value() )
                     ax['val_b'].setValue( old_ax['val_b'].value() )
                     
@@ -449,6 +451,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            self.cur_axes = (self.dropdown1.currentIndex(), self.dropdown2.currentIndex())
            self.dropdown2_label.show()
            self.dropdown2.show()
+           
+       
            
        #Update each of the axes fields visibility based on field settings
        for i, ax in enumerate(self.axes):
@@ -486,6 +490,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 val_b = float(ax['val_b'].value())
                 ind_a = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_a ))
                 ind_b = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_b ))
+
                 ax['ind_a'].setValue(ind_a)
                 ax['ind_b'].setValue(ind_b)
 
@@ -543,35 +548,61 @@ class ApplicationWindow(QtWidgets.QMainWindow):
          
          
     def updateDataUnits(self):
+         if self.debug:
+             print("Updating data units")
          try:
               #Update the data units first
               u = units.Unit(self.data_unit_field.text(), parse_strict='raise', format='ogip')
+              cu = units.Unit(self.data_cur_unit , parse_strict='raise', format='ogip')
               nu = units.Unit(self.data_native_unit, parse_strict='raise', format='ogip')
               self.data_unit_factor =  ( (1 * nu).to(u) ).value 
-              self.data_unit_field.setText( u.to_string() )
+              cur_unit_factor = ( (1 * nu).to(cu) ).value
+              
+              datarange_a_val = float(self.datarange_a.text())
+              datarange_b_val = float(self.datarange_b.text())
+              
+              print(self.data_unit_factor)
+              print(cur_unit_factor)
+              
+              print(datarange_a_val*self.data_unit_factor)
+              
+              self.datarange_a.setValue(datarange_a_val*self.data_unit_factor/cur_unit_factor)
+              self.datarange_b.setValue(datarange_b_val*self.data_unit_factor/cur_unit_factor)
+              
+              self.data_cur_unit = self.data_unit_field.text()
+              
               self.makePlot()
          except ValueError:
               self.warninglabel.setText("WARNING: Unit string is invalid: " + str(self.data_unit_field.text()) )
   
     def updateAxesUnits(self):
+         if self.debug:
+             print("Updating axis units")
          try:
               #Repeat the calculation for each axis
               for i, ax in enumerate(self.axes):
                    u = units.Unit(ax['unit_field'].text(), parse_strict='raise', format='ogip')
+                   cu = units.Unit(ax['cur_unit'], parse_strict='raise', format='ogip')
                    nu = units.Unit(ax['native_unit'], parse_strict='raise', format='ogip')
-                   cur_unit_factor = ax['unit_factor']
-                   ax['unit_factor'] =  (1 * nu).to(u).value 
-                   ax['unit_field'].setText( u.to_string() )
+     
+                   #New unit factor in relation to the native units
+                   ax['unit_factor'] =  (1 * nu).to(u).value
+                   #Old (currently displayed) unit factor in relation to native units
+                   cur_unit_factor =  (1 * nu).to(cu).value
+                   
                    
                    #Temporarily store the values so they don't get messed up
+                   #by the changing of the range
                    val_a = ax['val_a'].value()
                    val_b = ax['val_b'].value()
-                   
+
                    #Convert the range of the value fields
-                   ax['val_a'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, ax['valminmax'][1]*ax['unit_factor'])
-                   ax['val_b'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, ax['valminmax'][1]*ax['unit_factor'])
-                   
-                   #Convert the value axis fields
+                   ax['val_a'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, 
+                       ax['valminmax'][1]*ax['unit_factor']/cur_unit_factor)
+                   ax['val_b'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, 
+                       ax['valminmax'][1]*ax['unit_factor']/cur_unit_factor)
+
+                   #Convert the value axis fields to the new units
                    ax['val_a'].setValue( val_a*ax['unit_factor']/cur_unit_factor)
                    ax['val_b'].setValue( val_b*ax['unit_factor']/cur_unit_factor)
 
@@ -581,6 +612,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
               self.warninglabel.setText("WARNING: Unit string is invalid: " + str(ax['unit_field'].text()) )
               
     def updateDataRange(self):
+         if self.debug:
+             print("Updating data range")
          if self.datarange_center.isChecked():
               self.datarange_a.setDisabled(True)
               self.datarange_a.setValue(- self.datarange_b.value() )
@@ -595,6 +628,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     #PLOTTING ROUTINES
     
     def validateChoices(self):
+       if self.debug:
+             print("Validating choices")
        #Make a temporary array of the axes that are ACTUALLY about to be
        #plotted (ignoring 2nd one if the plot is 2D)
        if self.plottype_field.currentIndex() == 0:
@@ -637,6 +672,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     
 
     def makePlot(self):
+        if self.debug:
+             print("Making plot")
         self.clearCanvas()
         try:
             if self.validateChoices():
@@ -651,6 +688,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             
             
     def clearCanvas(self):
+        if self.debug:
+             print("Clearing canvas")
         try:
             self.figure.clf()
             self.canvas_ax.clear()
@@ -659,6 +698,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             pass
         
     def clearLayout(self, layout):
+        if self.debug:
+             print("Clearing layour")
         if layout !=None:
             while layout.count():
                 child = layout.takeAt(0)
@@ -670,7 +711,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
 
     def plot1D(self):
-        
+        if self.debug:
+             print("Making 1D plot")
         #Horizontal axis for this 1D plot - obj
         ax_ind = self.cur_axes[0]
         avg_axes = []
@@ -748,7 +790,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.canvas.draw()
     
     def plot2D(self):
-        
+        if self.debug:
+             print("Making 2D plot")
         #Horizontal axis for this 1D plot - obj
         hind = self.cur_axes[0]
         vind = self.cur_axes[1]
@@ -797,9 +840,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             data = np.squeeze(data)
             
             data = data*self.data_unit_factor
-            
-            
-            
+
             
         if vind > hind:
             data = data.transpose()
