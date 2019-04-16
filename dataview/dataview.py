@@ -351,7 +351,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax_dict['indbtn'].toggled.connect(self.updateIndValToggleAction)
             
 
-            width = 80
+            width = 100
             ax_dict['ind_a']  = ScientificDoubleSpinBox()
             ax_dict['ind_a'].setRange(ax_dict['indminmax'][0], ax_dict['indminmax'][1])
             ax_dict['ind_a'].setSingleStep(1)
@@ -393,11 +393,11 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
             
             ax_dict['unit_factor'] = 1.0
-            ax_dict['cur_unit'] = ax_dict['native_unit']
+            ax_dict['disp_unit'] = ax_dict['native_unit']
             ax_dict['unit_field'] = QtWidgets.QLineEdit(str(ax_dict['native_unit']))
             ax_dict['unit_field'].setFixedWidth(40)
             ax_dict['box'].addWidget(ax_dict['unit_field'])
-            ax_dict['unit_field'].editingFinished.connect(self.updateAxesUnits)
+            ax_dict['unit_field'].editingFinished.connect(lambda opt=ax_dict : self.updateAxesUnits(opt))
             
             
             ax_dict['avgcheckbox'] = QtWidgets.QCheckBox("Avg")
@@ -416,8 +416,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                     ax['ind_a'].setValue( old_ax['ind_a'].value() )
                     ax['ind_b'].setValue( old_ax['ind_b'].value() )
                     
-                    ax['val_a'].setValue( old_ax['val_a'].value() )
-                    ax['val_b'].setValue( old_ax['val_b'].value() )
+                    #ax['val_a'].setValue( old_ax['val_a'].value() )
+                    #ax['val_b'].setValue( old_ax['val_b'].value() )
                     
                     ax['unit_factor'] =  old_ax['unit_factor']
                     ax['unit_field'].setText(old_ax['unit_field'].text())
@@ -481,18 +481,22 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 ax['ind_a'].show()
                 ax['ind_b'].show()
 
-                
                
            #Calculate the indices or values...
            #whichever we aren't controlling right now
            if ax['valbtn'].isChecked():
                 val_a = float(ax['val_a'].value())
                 val_b = float(ax['val_b'].value())
+                
+                
                 ind_a = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_a ))
                 ind_b = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_b ))
-
                 ax['ind_a'].setValue(ind_a)
                 ax['ind_b'].setValue(ind_b)
+                
+                if ax['name'] == 'time':
+                    print(val_b)
+                    print(str(ax['val_b'].minimum()) + ':' + str(ax['val_b'].maximum()))
 
            elif ax['indbtn'].isChecked():
                 ind_a = int(ax['ind_a'].value())
@@ -560,12 +564,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
               
               datarange_a_val = float(self.datarange_a.text())
               datarange_b_val = float(self.datarange_b.text())
-              
-              print(self.data_unit_factor)
-              print(cur_unit_factor)
-              
-              print(datarange_a_val*self.data_unit_factor)
-              
+
               self.datarange_a.setValue(datarange_a_val*self.data_unit_factor/cur_unit_factor)
               self.datarange_b.setValue(datarange_b_val*self.data_unit_factor/cur_unit_factor)
               
@@ -575,36 +574,58 @@ class ApplicationWindow(QtWidgets.QMainWindow):
          except ValueError:
               self.warninglabel.setText("WARNING: Unit string is invalid: " + str(self.data_unit_field.text()) )
   
-    def updateAxesUnits(self):
+    def updateAxesUnits(self, thisax):
          if self.debug:
              print("Updating axis units")
          try:
               #Repeat the calculation for each axis
               for i, ax in enumerate(self.axes):
-                   u = units.Unit(ax['unit_field'].text(), parse_strict='raise', format='ogip')
-                   cu = units.Unit(ax['cur_unit'], parse_strict='raise', format='ogip')
-                   nu = units.Unit(ax['native_unit'], parse_strict='raise', format='ogip')
-     
-                   #New unit factor in relation to the native units
-                   ax['unit_factor'] =  (1 * nu).to(u).value
-                   #Old (currently displayed) unit factor in relation to native units
-                   cur_unit_factor =  (1 * nu).to(cu).value
-                   
-                   
-                   #Temporarily store the values so they don't get messed up
-                   #by the changing of the range
-                   val_a = ax['val_a'].value()
-                   val_b = ax['val_b'].value()
-
-                   #Convert the range of the value fields
-                   ax['val_a'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, 
-                       ax['valminmax'][1]*ax['unit_factor']/cur_unit_factor)
-                   ax['val_b'].setRange(ax['valminmax'][0]*ax['unit_factor']/cur_unit_factor, 
-                       ax['valminmax'][1]*ax['unit_factor']/cur_unit_factor)
-
-                   #Convert the value axis fields to the new units
-                   ax['val_a'].setValue( val_a*ax['unit_factor']/cur_unit_factor)
-                   ax['val_b'].setValue( val_b*ax['unit_factor']/cur_unit_factor)
+                   #Only recauclate the units for the axis associtated with the fcn call
+                   if ax == thisax:
+                       u = units.Unit(ax['unit_field'].text(), parse_strict='raise', format='ogip')
+                       cu = units.Unit(ax['disp_unit'], parse_strict='raise', format='ogip')
+                       nu = units.Unit(ax['native_unit'], parse_strict='raise', format='ogip')
+         
+                       #New unit factor in relation to the native units
+                       new_uf =  (1 * nu).to(u).value
+                       #Old (currently displayed) unit factor in relation to native units
+                       old_uf =  (1 * nu).to(cu).value
+                       
+                       #Temporarily store the values so they don't get messed up
+                       #by the changing of the range
+                       val_a = ax['val_a'].value()
+                       val_b = ax['val_b'].value()
+                       
+                       mod_uf = new_uf/old_uf
+                       
+                       print(ax['valminmax'][1])
+                       
+                       
+                       #These are modified just by the new_uf,
+                       #because they are stored always in native units
+                       valmin = ax['valminmax'][0]*new_uf
+                       valmax = ax['valminmax'][1]*new_uf
+                       
+                       print(valmax)
+                       
+                       print(new_uf)
+                       print(old_uf)
+                       print(mod_uf)
+                       print(valmin)
+                       print(valmax)
+    
+                       #Convert the range of the value fields
+                       ax['val_a'].setRange(valmin, valmax)
+                       ax['val_b'].setRange(valmin, valmax)
+                       
+    
+                       #Convert the value axis fields to the new units
+                       ax['val_a'].setValue( val_a*mod_uf)
+                       ax['val_b'].setValue( val_b*mod_uf)
+                       
+                       #Update the "current" unit variables
+                       ax['disp_unit'] = ax['unit_field'].text()
+                       ax['unit_factor'] = new_uf
 
               self.updateAxesFields()
               self.makePlot()
@@ -720,8 +741,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
 
         for i in range(len(self.axes) ):
-            d  = self.axes[i]
-            if i == ax_ind:   
+            d = self.axes[i]
+            if i == ax_ind:
                 hname = d['name']
                 h_unit = d['unit_field'].text()
                 h_unit_factor = d['unit_factor']
@@ -990,8 +1011,8 @@ class ScientificDoubleSpinBox(QtWidgets.QDoubleSpinBox):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        #self.setMinimum(-np.inf)
-        #self.setMaximum(np.inf)
+        self.setMinimum(-np.inf)
+        self.setMaximum(np.inf)
         self.validator = FloatValidator()
         self.setDecimals(1000)
 
@@ -1006,12 +1027,12 @@ class ScientificDoubleSpinBox(QtWidgets.QDoubleSpinBox):
 
     def textFromValue(self, value):
         return format_float(value)
-
+    
     def stepBy(self, steps):
         text = self.cleanText()
         groups = _float_re.search(text).groups()
         decimal = float(groups[1])
-        decimal += steps
+        decimal += steps*self.stepsize
         new_string = "{:g}".format(decimal) + (groups[3] if groups[3] else "")
         self.lineEdit().setText(new_string)
 
