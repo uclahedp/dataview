@@ -189,7 +189,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
 
         
         self.datarange_lbl = QtWidgets.QLabel("Data Range: ")
-        self.datarange_lbl.setFixedWidth(60)
+        self.datarange_lbl.setFixedWidth(80)
         self.datarange_box.addWidget(self.datarange_lbl)
         
         self.datarange_a = ScientificDoubleSpinBox()
