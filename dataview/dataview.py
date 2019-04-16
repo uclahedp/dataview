@@ -23,7 +23,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
      
     def __init__(self):
         super().__init__()
-        self.debug = True
+        self.debug = False
         self.buildGUI()
 
 
@@ -295,6 +295,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                      
                      ax_dict['indminmax'] = ( 0 ,  len(f[name]) -1 )
                      ax_dict['valminmax'] = ( f[name][0] , f[name][-1] )
+                     
+                     print(ax_dict['valminmax'])
 
                      
                      try:
@@ -493,10 +495,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 ind_b = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_b ))
                 ax['ind_a'].setValue(ind_a)
                 ax['ind_b'].setValue(ind_b)
-                
-                if ax['name'] == 'time':
-                    print(val_b)
-                    print(str(ax['val_b'].minimum()) + ':' + str(ax['val_b'].maximum()))
 
            elif ax['indbtn'].isChecked():
                 ind_a = int(ax['ind_a'].value())
