@@ -285,30 +285,28 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                   self.data_cur_unit = self.data_native_unit
 
                   
-                  for ind, ax in enumerate(temp_axes):
-                     ax_dict = {}
-                     name = ax.decode("utf-8")
-                     ax_dict['name'] =  name
-                     ax_dict['ax'] = f[name][:]
-                     ax_dict['axind'] = ind
-                     ax_dict['native_unit'] = f[name].attrs['unit']
+                  for ind, axis in enumerate(temp_axes):
+                     ax = {}
+                     name = axis.decode("utf-8")
+                     ax['name'] =  name
+                     ax['ax'] = f[name][:]
+                     ax['axind'] = ind
+                     ax['native_unit'] = f[name].attrs['unit']
                      
-                     ax_dict['indminmax'] = ( 0 ,  len(f[name]) -1 )
-                     ax_dict['valminmax'] = ( f[name][0] , f[name][-1] )
-                     
-                     print(ax_dict['valminmax'])
-
+                     ax['indminmax'] = ( 0 ,  len(f[name]) -1 )
+                     ax['valminmax'] = ( f[name][0] , f[name][-1] )
                      
                      try:
-                         ax_dict['step'] = np.mean(np.gradient(ax_dict['ax']))
+                         ax['step'] = np.mean(np.gradient(ax['ax']))
                      except ValueError:
-                         ax_dict['step'] = 1
+                         ax['step'] = 1
                          
-                     self.axes.append(ax_dict)
+                     self.axes.append(ax)
                     
              self.freezeGUI()
              self.initAxesBoxes()
              self.unfreezeGUI()
+             self.makePlot()
 
 
     def initAxesBoxes(self):
@@ -323,107 +321,130 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.dropdown2.clear()
 
         for i, ax in enumerate(self.axes):
-            #Take the ax_dict out of the axes array
-            ax_dict = self.axes[i]
+            #Take the ax out of the axes array
+            ax = self.axes[i]
             
             #Add the axes names to the dropdown menus
-            self.dropdown1.addItem(ax_dict['name'])
-            self.dropdown2.addItem(ax_dict['name'])
+            self.dropdown1.addItem(ax['name'])
+            self.dropdown2.addItem(ax['name'])
 
-            ax_dict['box'] = QtWidgets.QHBoxLayout()
-            self.axesbox.addLayout(ax_dict['box'])
+            ax['box'] = QtWidgets.QHBoxLayout()
+            self.axesbox.addLayout(ax['box'])
   
 
-            ax_dict['label1']  = QtWidgets.QLabel('')  
-            ax_dict['label1'].setFixedWidth(250)
-            ax_dict['box'].addWidget(ax_dict['label1'])
+            ax['label1']  = QtWidgets.QLabel('')  
+            ax['label1'].setFixedWidth(250)
+            ax['box'].addWidget(ax['label1'])
             
-            ax_dict['indvalbtngrp'] = QtWidgets.QButtonGroup()
+            ax['indvalbtngrp'] = QtWidgets.QButtonGroup()
             
-            ax_dict['valbtn'] = QtWidgets.QRadioButton("Val")
-            ax_dict['valbtn'].setChecked(True)
-            ax_dict['box'].addWidget(ax_dict['valbtn'])
-            ax_dict['indvalbtngrp'].addButton(ax_dict['valbtn'])
-            ax_dict['valbtn'].toggled.connect(self.updateIndValToggleAction)
+            ax['valbtn'] = QtWidgets.QRadioButton("Val")
+            ax['valbtn'].setChecked(True)
+            ax['box'].addWidget(ax['valbtn'])
+            ax['indvalbtngrp'].addButton(ax['valbtn'])
+            ax['valbtn'].toggled.connect(self.updateIndValToggleAction)
                  
-            ax_dict['indbtn'] = QtWidgets.QRadioButton("Ind")
-            ax_dict['indbtn'].setChecked(False)
-            ax_dict['indvalbtngrp'].addButton(ax_dict['indbtn'])
-            ax_dict['box'].addWidget(ax_dict['indbtn'])
-            ax_dict['indbtn'].toggled.connect(self.updateIndValToggleAction)
+            ax['indbtn'] = QtWidgets.QRadioButton("Ind")
+            ax['indbtn'].setChecked(False)
+            ax['indvalbtngrp'].addButton(ax['indbtn'])
+            ax['box'].addWidget(ax['indbtn'])
+            ax['indbtn'].toggled.connect(self.updateIndValToggleAction)
             
 
             width = 100
-            ax_dict['ind_a']  = ScientificDoubleSpinBox()
-            ax_dict['ind_a'].setRange(ax_dict['indminmax'][0], ax_dict['indminmax'][1])
-            ax_dict['ind_a'].setSingleStep(1)
-            ax_dict['ind_a'].setFixedWidth(width)
-            ax_dict['ind_a'].setValue(0)
-            ax_dict['ind_a'].setWrapping(True)
-            ax_dict['box'].addWidget(ax_dict['ind_a'])
-            ax_dict['ind_a'].editingFinished.connect(self.updateAxesFieldsAction)
+            ax['ind_a']  = ScientificDoubleSpinBox()
+            ax['ind_a'].setRange(ax['indminmax'][0], ax['indminmax'][1])
+            ax['ind_a'].setSingleStep(1)
+            ax['ind_a'].setFixedWidth(width)
+            ax['ind_a'].setValue(0)
+            ax['ind_a'].setWrapping(True)
+            ax['box'].addWidget(ax['ind_a'])
+            ax['ind_a'].editingFinished.connect(self.updateAxesFieldsAction)
             
-            ax_dict['val_a']  = ScientificDoubleSpinBox()
-            ax_dict['val_a'].setRange(ax_dict['valminmax'][0], ax_dict['valminmax'][1])
-            ax_dict['val_a'].setFixedWidth(width)
-            ax_dict['val_a'].setValue(0)
-            ax_dict['val_a'].setWrapping(True)
-            ax_dict['box'].addWidget(ax_dict['val_a'])
-            ax_dict['val_a'].editingFinished.connect(self.updateAxesFieldsAction)
+            ax['val_a']  = ScientificDoubleSpinBox()
+            ax['val_a'].setRange(ax['valminmax'][0], ax['valminmax'][1])
+            ax['val_a'].setFixedWidth(width)
+            ax['val_a'].setValue(0)
+            ax['val_a'].setWrapping(True)
+            ax['box'].addWidget(ax['val_a'])
+            ax['val_a'].editingFinished.connect(self.updateAxesFieldsAction)
             
             
-            ax_dict['ind_b']  = ScientificDoubleSpinBox()
-            ax_dict['ind_b'].setRange(ax_dict['indminmax'][0], ax_dict['indminmax'][1])
-            ax_dict['ind_b'].setSingleStep(1)
-            ax_dict['ind_b'].setFixedWidth(width)
-            ax_dict['ind_b'].setValue(ax_dict['indminmax'][1])
-            ax_dict['ind_b'].setWrapping(True)
-            ax_dict['box'].addWidget(ax_dict['ind_b'])
-            ax_dict['ind_b'].editingFinished.connect(self.updateAxesFieldsAction)
+            ax['ind_b']  = ScientificDoubleSpinBox()
+            ax['ind_b'].setRange(ax['indminmax'][0], ax['indminmax'][1])
+            ax['ind_b'].setSingleStep(1)
+            ax['ind_b'].setFixedWidth(width)
+            ax['ind_b'].setValue(ax['indminmax'][1])
+            ax['ind_b'].setWrapping(True)
+            ax['box'].addWidget(ax['ind_b'])
+            ax['ind_b'].editingFinished.connect(self.updateAxesFieldsAction)
             
-            ax_dict['val_b']  = ScientificDoubleSpinBox()
-            ax_dict['val_b'].setRange(ax_dict['valminmax'][0], ax_dict['valminmax'][1])
-            ax_dict['val_b'].setFixedWidth(width)
-            ax_dict['val_b'].setValue(ax_dict['valminmax'][1])
-            ax_dict['val_b'].setWrapping(True)
-            ax_dict['box'].addWidget(ax_dict['val_b'])
-            ax_dict['val_b'].editingFinished.connect(self.updateAxesFieldsAction)
+            ax['val_b']  = ScientificDoubleSpinBox()
+            ax['val_b'].setRange(ax['valminmax'][0], ax['valminmax'][1])
+            ax['val_b'].setFixedWidth(width)
+            ax['val_b'].setValue(ax['valminmax'][1])
+            ax['val_b'].setWrapping(True)
+            ax['box'].addWidget(ax['val_b'])
+            ax['val_b'].editingFinished.connect(self.updateAxesFieldsAction)
             
-            ax_dict['unit_lbl'] = QtWidgets.QLabel("Unit: ")
-            ax_dict['unit_lbl'].setFixedWidth(30)
-            ax_dict['box'].addWidget(ax_dict['unit_lbl'])
+            ax['unit_lbl'] = QtWidgets.QLabel("Unit: ")
+            ax['unit_lbl'].setFixedWidth(30)
+            ax['box'].addWidget(ax['unit_lbl'])
         
             
-            ax_dict['unit_factor'] = 1.0
-            ax_dict['disp_unit'] = ax_dict['native_unit']
-            ax_dict['unit_field'] = QtWidgets.QLineEdit(str(ax_dict['native_unit']))
-            ax_dict['unit_field'].setFixedWidth(40)
-            ax_dict['box'].addWidget(ax_dict['unit_field'])
-            ax_dict['unit_field'].editingFinished.connect(lambda opt=ax_dict : self.updateAxesUnits(opt))
+            ax['unit_factor'] = 1.0
+            ax['disp_unit'] = ax['native_unit']
+            ax['unit_field'] = QtWidgets.QLineEdit(str(ax['native_unit']))
+            ax['unit_field'].setFixedWidth(40)
+            ax['box'].addWidget(ax['unit_field'])
+            ax['unit_field'].editingFinished.connect(lambda opt=ax : self.updateAxesUnits(opt))
             
             
-            ax_dict['avgcheckbox'] = QtWidgets.QCheckBox("Avg")
-            ax_dict['avgcheckbox'].setChecked(False)  
-            ax_dict['box'].addWidget(ax_dict['avgcheckbox'])
-            ax_dict['avgcheckbox'].stateChanged.connect(self.updateAvgCheckBoxAction)
+            ax['avgcheckbox'] = QtWidgets.QCheckBox("Avg")
+            ax['avgcheckbox'].setChecked(False)  
+            ax['box'].addWidget(ax['avgcheckbox'])
+            ax['avgcheckbox'].stateChanged.connect(self.updateAvgCheckBoxAction)
             
-            #Put the ax_dict back into the axes array
-            self.axes[i] = ax_dict
+            #Put the ax back into the axes array
+            self.axes[i] = ax
         
         #If names of any old axes match those of any new axes
-        #attempt to copy over the currently chosen indices
+        #attempt to copy over the currently chosen indices etc.
         for i, ax in enumerate(self.axes):
             for j, old_ax in enumerate(self.last_axes):
                 if ax['name'] == old_ax['name']:
-                    ax['ind_a'].setValue( old_ax['ind_a'].value() )
-                    ax['ind_b'].setValue( old_ax['ind_b'].value() )
-                    
-                    ax['val_a'].setValue( old_ax['val_a'].value() )
-                    ax['val_b'].setValue( old_ax['val_b'].value() )
-                    
-                    ax['unit_factor'] =  old_ax['unit_factor']
+                    uf = old_ax['unit_factor']
+                    ax['unit_factor'] =  uf
+                    ax['disp_unit'] = old_ax['disp_unit']
                     ax['unit_field'].setText(old_ax['unit_field'].text())
-    
+                    
+                    #Transfer averaging state
+                    ax['avgcheckbox'].setChecked(old_ax['avgcheckbox'].isChecked())
+                     
+                    old_val_a = old_ax['val_a'].value()
+                    old_val_b = old_ax['val_b'].value()
+                    new_min = ax['valminmax'][0]*uf
+                    new_max = ax['valminmax'][1]*uf
+                    
+                    #Force the old value range into the new min/max
+                    val_a = self.forceInRange(old_val_a, new_min, new_max)
+                    val_b = self.forceInRange(old_val_b, new_min, new_max)
+                    
+                    #Set the range for the new value cells
+                    ax['val_a'].setRange(new_min, new_max)
+                    ax['val_b'].setRange(new_min, new_max)
+                    
+                    #Calculate and set indices close to these values, then
+                    #update the values to be an exact match
+                    ind_a = self.valToInd(old_val_a, ax['ax'], ax['unit_factor'])
+                    ind_b = self.valToInd(old_val_b, ax['ax'], ax['unit_factor'])
+                    val_a = self.indToVal(ind_a, ax['ax'], ax['unit_factor'])
+                    val_b = self.indToVal(ind_b, ax['ax'], ax['unit_factor'])
+                    ax['ind_a'].setValue(ind_a)
+                    ax['ind_b'].setValue(ind_b)
+                    ax['val_a'].setValue(val_a)
+                    ax['val_b'].setValue(val_b)
+                    
 
         #If new axes match old ones, set the cur_axes to match
         if len(self.last_axes) != 0:
@@ -439,6 +460,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 
         #Once all the fields have been created, make sure they are set correctly
         self.updateAxesFields()
+        
 
 
     def updateAxesFields(self):
@@ -463,6 +485,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            is_avg = ax['avgcheckbox'].isChecked()
            ax['ind_a'].setDisabled(is_avg)
            ax['val_a'].setDisabled(is_avg)
+           
+           
            #b is only enabled when it is the current axis AND not averaged
            if i in self.cur_axes and ax['avgcheckbox'].isChecked()==False :
                ax['ind_b'].setDisabled(False)
@@ -470,7 +494,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
            else:
                ax['ind_b'].setDisabled(True)
                ax['val_b'].setDisabled(True) 
-               
+          
            #Hide or show fields based on index/value mode
            if ax['valbtn'].isChecked():
                 ax['ind_a'].hide()
@@ -482,25 +506,22 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 ax['val_b'].hide()
                 ax['ind_a'].show()
                 ax['ind_b'].show()
-
-               
+                
            #Calculate the indices or values...
            #whichever we aren't controlling right now
            if ax['valbtn'].isChecked():
-                val_a = float(ax['val_a'].value())
-                val_b = float(ax['val_b'].value())
-                
-                
-                ind_a = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_a ))
-                ind_b = np.argmin(np.abs(ax['ax']*ax['unit_factor'] - val_b ))
+                val_a = ax['val_a'].value()
+                val_b = ax['val_b'].value()
+                ind_a = self.valToInd(val_a, ax['ax'], ax['unit_factor'])
+                ind_b = self.valToInd(val_b, ax['ax'], ax['unit_factor'])
                 ax['ind_a'].setValue(ind_a)
                 ax['ind_b'].setValue(ind_b)
-
+                
            elif ax['indbtn'].isChecked():
                 ind_a = int(ax['ind_a'].value())
                 ind_b = int(ax['ind_b'].value())
-                val_a = ax['ax'][ind_a]*ax['unit_factor']
-                val_b = ax['ax'][ind_b]*ax['unit_factor']
+                val_a = self.indToVal(ind_a, ax['ax'], ax['unit_factor'])
+                val_b = self.indToVal(ind_b, ax['ax'], ax['unit_factor'])
                 ax['val_a'].setValue(val_a)
                 ax['val_b'].setValue(val_b)
                 
@@ -574,12 +595,18 @@ class ApplicationWindow(QtWidgets.QMainWindow):
   
     def updateAxesUnits(self, thisax):
          if self.debug:
-             print("Updating axis units")
+             print("**********Updating axis units**********")
          try:
               #Repeat the calculation for each axis
               for i, ax in enumerate(self.axes):
                    #Only recauclate the units for the axis associtated with the fcn call
                    if ax == thisax:
+                       if self.debug:
+                            print("Unit label text: " + str(ax['unit_field'].text()))
+                            print("Current Unit Displayed: " + str(ax['disp_unit']))
+                            print("Axis Native Unit: " + str(ax['native_unit']))
+                            print("Axis Unit Factor: " + str(ax['unit_factor']))
+                        
                        u = units.Unit(ax['unit_field'].text(), parse_strict='raise', format='ogip')
                        cu = units.Unit(ax['disp_unit'], parse_strict='raise', format='ogip')
                        nu = units.Unit(ax['native_unit'], parse_strict='raise', format='ogip')
@@ -614,6 +641,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                        #Update the "current" unit variables
                        ax['disp_unit'] = ax['unit_field'].text()
                        ax['unit_factor'] = new_uf
+                       
+                       if self.debug:
+                            print("*Calculation*")
+                            print("Current Unit Displayed: " + str(ax['disp_unit']))
+                            print("Axis Native Unit: " + str(ax['native_unit']))
+                            print("Axis Unit Factor: " + str(ax['unit_factor']))
 
               self.updateAxesFields()
               self.makePlot()
@@ -708,7 +741,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
     def clearLayout(self, layout):
         if self.debug:
-             print("Clearing layour")
+             print("Clearing layout")
         if layout !=None:
             while layout.count():
                 child = layout.takeAt(0)
@@ -740,7 +773,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 hslice = slice(a,b, 1)
                 
             elif d['avgcheckbox'].isChecked():
-                dslice.append( slice(None,None,None) )
+                a = int(d['ind_a'].value())
+                b = int(d['ind_b'].value())
+                dslice.append( slice(a, b, 1) )
                 avg_axes.append(i)
 
             else:
@@ -828,7 +863,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                      v_unit_factor = d['unit_factor']
             
             elif d['avgcheckbox'].isChecked():
-                dslice.append( slice(None,None,None) )
+                a = int(d['ind_a'].value())
+                b = int(d['ind_b'].value())
+                dslice.append( slice(a, b, 1) )
                 avg_axes.append(i)
                 
             else:
@@ -964,6 +1001,27 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             return '%.2E' % n
         else:
             return '%.2f' % n
+       
+          
+    def valToInd(self, val, ax, unit_factor):
+         ind = np.argmin(np.abs(ax*unit_factor - val))
+         return ind
+    
+    def indToVal(self, ind, ax, unit_factor):
+         val = ax[ind]*unit_factor
+         return val
+    
+     
+    def forceInRange(self, x, a, b):
+         if x > b:
+              return b
+         elif x < a:
+              return a
+         else:
+              return x
+         
+          
+     
      
      
      
@@ -1014,6 +1072,7 @@ class ScientificDoubleSpinBox(QtWidgets.QDoubleSpinBox):
         return float(text)
 
     def textFromValue(self, value):
+        #print('FORMATTING: ' + str(value) + ' -> ' + str(format_float(value)))
         return format_float(value)
     
     def stepBy(self, steps):
