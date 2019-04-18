@@ -1,6 +1,7 @@
 import sys
 import os
 from pathlib import Path as pathlibPath
+import traceback
 
 #Used for sci notation spinbox
 import re
@@ -854,6 +855,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                elif a  > b:
                    self.warninglabel.setText("WARNING: First range element should be smallest!")
                    return False
+   
+                   
 
        #If no warnings are found, set the label to blank and return True
        self.warninglabel.setText("")
@@ -875,6 +878,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                     self.plot2D()
         except ValueError as e:
             print("Value Error!: " + str(e))
+            print(traceback.format_exc())
+        except IndexError as e:
+            print("Index Error!: " + str(e))
+            print(traceback.format_exc())
    
     
     def applyDataFunctions(self):
@@ -931,6 +938,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         avg_axes = []
         
+        
+        loaded_axes = 0
         if self.plottype_field.currentIndex() == 0:
             hax_ind = self.cur_axes[0]
             vax_ind = -1
@@ -943,7 +952,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                     a = int(ax['ind_a'].value())
                     b = int(ax['ind_b'].value())
                     dslice.append( slice(a, b, 1) )
-                    
+                    loaded_axes += 1
                     if i == hax_ind:
                          self.hax['name'] = ax['name']
                          self.hax['slice'] = slice(a,b, 1)
@@ -957,8 +966,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 elif ax['avgcheckbox'].isChecked():
                     a = int(ax['ind_a'].value())
                     b = int(ax['ind_b'].value())
-                    dslice.append( slice(a, b, 1) )
-                    avg_axes.append(i)
+                    dslice.append( slice(a, b+1, 1) )
+                    avg_axes.append(loaded_axes)
+                    loaded_axes += 1
                     
                 else:
                     a = int(ax['ind_a'].value())
@@ -972,6 +982,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 
                 #If selected, apply averaging
                 if len(avg_axes) != 0:
+                    print(self.data.shape)
+                    print(avg_axes)
                     self.data = np.mean(self.data, axis=tuple(avg_axes))
                 
                 
