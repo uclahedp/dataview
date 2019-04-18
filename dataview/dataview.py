@@ -11,6 +11,8 @@ import numpy as np
 
 from astropy import units
 
+from scipy import ndimage
+
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 import matplotlib
@@ -119,7 +121,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         self.showFilter = QtWidgets.QAction(" &Filter", self, checkable=True)
         self.showFilter.setChecked(False)
-        
+        self.showFilter.triggered.connect(self.showFilterAction)
         
         #SETUP MENU
         menubar = self.menuBar()
@@ -259,7 +261,40 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.connectedList.append(self.data_unit_field)
         
         
+        #CREATE AND FILL THE FILTER OPTIONS BOX
+        self.filterbox = QtWidgets.QHBoxLayout()
+        self.centerbox.addLayout(self.filterbox)
+        self.filterbox_widgets = []
         
+        
+        self.lowpass_checkbox = QtWidgets.QCheckBox("Lowpass")
+        self.lowpass_checkbox.setChecked(False)  
+        self.filterbox.addWidget(self.lowpass_checkbox)
+        self.filterbox_widgets.append(self.lowpass_checkbox)
+        self.lowpass_checkbox.stateChanged.connect(self.makePlot)
+
+        self.filter_sigma_lbl = QtWidgets.QLabel("Filter Sigma: ")
+        self.filter_sigma_lbl.setFixedWidth(100)
+        self.filterbox_widgets.append(self.filter_sigma_lbl)
+        self.filterbox.addWidget(self.filter_sigma_lbl)
+        
+        self.filter_sigma  = ScientificDoubleSpinBox()
+        self.filter_sigma.setRange(0.1, 100)
+        self.filter_sigma.setSingleStep(.1)
+        self.filter_sigma.setFixedWidth(80)
+        self.filter_sigma.setValue(1)
+        self.filter_sigma.setWrapping(False)
+        self.filterbox.addWidget(self.filter_sigma)
+        self.filterbox_widgets.append(self.filter_sigma)
+        self.filter_sigma.editingFinished.connect(self.makePlot)
+        for x in self.filterbox_widgets:
+            x.hide()
+
+
+
+
+
+
         self.axis_box_label = QtWidgets.QLabel("Chose Axis/Axes")
         self.axis_box_label.setFont(self.title_font)
         self.axis_box_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -292,7 +327,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.connectedList.append(self.dropdown2)
         
         
-
+        
         
         
     def freezeGUI(self):
@@ -490,6 +525,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax['avgbox_widgets'].append(ax['avgcheckbox'])
             ax['avgcheckbox'].stateChanged.connect(self.updateAvgCheckBoxAction)
             
+
             #Make a divider line (unless this is the last axis)
             if i != len(self.axes)-1:
                 ax['divFrame'] = QtWidgets.QFrame()
@@ -553,6 +589,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #Once all the fields have been created, make sure they are set correctly
         self.updateAxesFields()
         self.showAvgAction()
+        self.showFilterAction()
         
 
 
@@ -575,13 +612,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
        for i, ax in enumerate(self.axes):
            #Enable/Disable fields as appropriate
            #a is disabled only if the avg box is checked
-           is_avg = ax['avgcheckbox'].isChecked()
-           ax['ind_a'].setDisabled(is_avg)
-           ax['val_a'].setDisabled(is_avg)
-           
-           
+           #is_avg = ax['avgcheckbox'].isChecked()
+           #ax['ind_a'].setDisabled(is_avg)
+           #ax['val_a'].setDisabled(is_avg)
+
            #b is only enabled when it is the current axis AND not averaged
-           if i in self.cur_axes and ax['avgcheckbox'].isChecked()==False :
+           if i in self.cur_axes or ax['avgcheckbox'].isChecked()==True :
                ax['ind_b'].setDisabled(False)
                ax['val_b'].setDisabled(False)
            else:
@@ -645,7 +681,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             else:
                 for x in ax['avgbox_widgets']:
                     x.hide()
-     
+                    
+    def showFilterAction(self):
+        for ax in self.axes:
+            if self.showFilter.isChecked():
+                for x in self.filterbox_widgets:
+                    x.show()
+            else:
+                for x in self.filterbox_widgets:
+                    x.hide()
+                    
     def updateAxesFieldsAction(self):
         if self.debug:
            print("Triggered updateAxesFieldsAction")
@@ -821,18 +866,25 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         try:
             if self.validateChoices():
                 self.getData()
+                
+                self.applyDataFunctions()
+                
                 if self.plottype_field.currentIndex() == 0:
                     self.plot1D()
                 elif self.plottype_field.currentIndex() == 1:
                     self.plot2D()
         except ValueError as e:
             print("Value Error!: " + str(e))
-           
-            
+   
+    
     def applyDataFunctions(self):
-        if self.debug:
-             print("Applying data functions")
-            
+        if self.lowpass_checkbox.isChecked():
+            self.applyLowPassFilter()
+
+    def applyLowPassFilter(self):
+        sigma = self.filter_sigma.value()
+        self.data = ndimage.gaussian_filter(self.data, sigma)
+    
     def clearCanvas(self):
         if self.debug:
              print("Clearing canvas")
@@ -876,6 +928,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         if self.debug:
              print("Getting Data From File")
         dslice = []
+        
         avg_axes = []
         
         if self.plottype_field.currentIndex() == 0:
@@ -890,6 +943,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                     a = int(ax['ind_a'].value())
                     b = int(ax['ind_b'].value())
                     dslice.append( slice(a, b, 1) )
+                    
                     if i == hax_ind:
                          self.hax['name'] = ax['name']
                          self.hax['slice'] = slice(a,b, 1)
@@ -901,7 +955,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                          self.vax['unit'] = ax['unit_field'].text()
                          self.vax['unit_factor'] = ax['unit_factor']
                 elif ax['avgcheckbox'].isChecked():
-                    dslice.append( slice(None, None, 1) )
+                    a = int(ax['ind_a'].value())
+                    b = int(ax['ind_b'].value())
+                    dslice.append( slice(a, b, 1) )
                     avg_axes.append(i)
                     
                 else:
@@ -912,9 +968,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 self.hax['ax'] = np.squeeze(f[self.hax['name'] ][self.hax['slice']])*self.hax['unit_factor']
                 self.data  = np.squeeze(f['data'][tuple(dslice)])*self.data_unit_factor
                 
+                
+                
                 #If selected, apply averaging
                 if len(avg_axes) != 0:
                     self.data = np.mean(self.data, axis=tuple(avg_axes))
+                
                 
                 #If 2D plot, do the vertical axis too
                 if self.plottype_field.currentIndex() == 1:
