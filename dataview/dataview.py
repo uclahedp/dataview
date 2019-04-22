@@ -268,11 +268,24 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.filterbox_widgets = []
         
         
-        self.lowpass_checkbox = QtWidgets.QCheckBox("Lowpass")
+        self.nofilter_checkbox = QtWidgets.QRadioButton("No Filter")
+        self.nofilter_checkbox.setChecked(False)  
+        self.filterbox.addWidget(self.nofilter_checkbox)
+        self.filterbox_widgets.append(self.nofilter_checkbox)
+        self.nofilter_checkbox.toggled.connect(self.makePlot)
+        
+        self.lowpass_checkbox = QtWidgets.QRadioButton("Lowpass")
         self.lowpass_checkbox.setChecked(False)  
         self.filterbox.addWidget(self.lowpass_checkbox)
         self.filterbox_widgets.append(self.lowpass_checkbox)
-        self.lowpass_checkbox.stateChanged.connect(self.makePlot)
+        self.lowpass_checkbox.toggled.connect(self.makePlot)
+        
+        self.highpass_checkbox = QtWidgets.QRadioButton("Highpass")
+        self.highpass_checkbox.setChecked(False)  
+        self.filterbox.addWidget(self.highpass_checkbox)
+        self.filterbox_widgets.append(self.highpass_checkbox)
+        self.highpass_checkbox.toggled.connect(self.makePlot)
+        
 
         self.filter_sigma_lbl = QtWidgets.QLabel("Filter Sigma: ")
         self.filter_sigma_lbl.setFixedWidth(100)
@@ -280,8 +293,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.filterbox.addWidget(self.filter_sigma_lbl)
         
         self.filter_sigma  = ScientificDoubleSpinBox()
-        self.filter_sigma.setRange(0.1, 100)
-        self.filter_sigma.setSingleStep(.1)
+        self.filter_sigma.setRange(0.01, 1000)
+        self.filter_sigma.setSingleStep(.01)
         self.filter_sigma.setFixedWidth(80)
         self.filter_sigma.setValue(1)
         self.filter_sigma.setWrapping(False)
@@ -886,11 +899,12 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     
     def applyDataFunctions(self):
         if self.lowpass_checkbox.isChecked():
-            self.applyLowPassFilter()
+            sigma = self.filter_sigma.value()
+            self.data = ndimage.gaussian_filter(self.data, sigma)
+        elif self.highpass_checkbox.isChecked():
+            sigma = self.filter_sigma.value()
+            self.data = self.data - ndimage.gaussian_filter(self.data, sigma)
 
-    def applyLowPassFilter(self):
-        sigma = self.filter_sigma.value()
-        self.data = ndimage.gaussian_filter(self.data, sigma)
     
     def clearCanvas(self):
         if self.debug:
