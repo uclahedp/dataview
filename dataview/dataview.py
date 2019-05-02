@@ -379,7 +379,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
              with h5py.File(self.filepath, 'r') as f:
                   temp_axes = ( f['data'].attrs['dimensions']  ) 
                   
-                  self.data_unit_field.setText( f['data'].attrs['unit'][0] )
+                  self.data_unit_field.setText( f['data'].attrs['unit'])
                   self.data_native_unit = self.data_unit_field.text()
                   self.data_cur_unit = self.data_native_unit
 
@@ -390,8 +390,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                      ax['name'] =  name
                      ax['ax'] = f[name][:]
                      ax['axind'] = ind
-                     print(f[name].attrs['unit'][0])
-                     ax['native_unit'] = f[name].attrs['unit'][0]
+                     ax['native_unit'] = f[name].attrs['unit']
                      
                      
                      ax['indminmax'] = ( 0 ,  len(f[name]) -1 )
