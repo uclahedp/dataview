@@ -5,7 +5,7 @@ The dataView program makes 'quicklook' plots from standardized UCLAHEDP-format H
 Dataview requires both Python3 and some depenencies. This isn't a fancy real package yet, so you'll have to install them all manually. You can do this by either manually configuring your local python enviroment to run the package, or by installing the Anaconda distribution, which already contains most of these packages.
 
 *Local Python Enviroment*
-1) Install Python 3
+1) Install Python 3. If necessary, add python to the enviroment PATH variable (the installer should offer to do this for you).
 2) Download the dataview.py file.
 3) Install the required packages by running the following command from terminal
 "python -m pip install matplotlib h5py numpy scipy PyQt5 astropy "
