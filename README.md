@@ -8,19 +8,19 @@ Dataview requires both Python3 and some depenencies. This isn't a fancy real pac
 1) Install Python 3
 2) Download the dataview.py file.
 3) Install the required packages by running the following command from terminal
-"pip3 install matplotlib h5py numpy PyQt5 astropy"
+"python -m pip install matplotlib h5py numpy scipy PyQt5 astropy "
 4) Run dataview by either clicking on the dataview.py file, or by navigating to the file in terminal and running
 "python dataview.py"
 
 *Anaconda*
 1) Install Anaconda Python >= 3.6
 2) (Optional): Create a new enviroment for using dataview. There shouldn't be too many conflicts with other python package requirements, but this is technically the safest way to install anything.
-3) Under the "Enviroments" tab, install the following packages using the package manegar: matplotlib h5py numpy pyqt astropy
+3) Under the "Enviroments" tab, install the following packages using the package manegar: matplotlib h5py numpy scipy pyqt astropy. Some may already be installed.
 4) Open the terminal (left click green triangle), navigate to the dataview.py file, and run
 "python dataview.py". Alternately, open the file in Spyder and run it there.
 
 Note: You can also directly install the dependencies by running the following command in the enviroment terminal:
-"conda install matplotlib h5py numpy pyqt astropy"
+"conda install matplotlib h5py numpy scipy pyqt astropy"
 
 
 
