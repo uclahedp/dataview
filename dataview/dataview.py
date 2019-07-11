@@ -489,7 +489,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             ax['val_a']  = ScientificDoubleSpinBox()
             ax['val_a'].setRange(ax['valminmax'][0], ax['valminmax'][1])
             ax['val_a'].setFixedWidth(width)
-            ax['val_a'].setValue(0)
+            ax['val_a'].setValue(ax['valminmax'][0])
             ax['val_a'].setWrapping(True)
             ax['mainbox'].addWidget(ax['val_a'])
             ax['value_list'].append(ax['val_a'])
