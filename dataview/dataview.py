@@ -21,6 +21,8 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import matplotlib.figure
 import matplotlib.cm
 
+import time
+
 
 class ApplicationWindow(QtWidgets.QMainWindow):
      
@@ -42,6 +44,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         #hdf5 filepath
         self.filepath = ''
+        
+        #Directory for movie frames to be saved
+        self.movie_dir = ''
     
         #Array of axes dictionaries
         self.axes = []
@@ -84,7 +89,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.vax = {'ax': 0, 'name': '', 'slice': 0, 'unit': '', 'unit_factor': 0}
         
         
-        
         #DEFINE fonts
         self.text_font = QtGui.QFont()
         self.text_font.setPointSize(12)
@@ -116,13 +120,17 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #Setup options menue + actions within
         optionsMenu = QtWidgets.QMenu('Options', self)
         
-        self.showAvg = QtWidgets.QAction(" &Average", self, checkable=True)
-        self.showAvg.setChecked(False)
-        self.showAvg.triggered.connect(self.showAvgAction)
-        
         self.showFilter = QtWidgets.QAction(" &Filter", self, checkable=True)
         self.showFilter.setChecked(False)
         self.showFilter.triggered.connect(self.showFilterAction)
+        
+        
+        self.showMovieBox = QtWidgets.QAction(" &Movie", self, checkable=True)
+        self.showMovieBox.setChecked(False)
+        self.showMovieBox.triggered.connect(self.showMovieBoxAction)
+        
+        
+        
         
         #SETUP MENU
         menubar = self.menuBar()
@@ -136,9 +144,8 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         #Add options menu and associated submenu options
         menubar.addMenu(optionsMenu)
-        optionsMenu.addAction(self.showAvg)
         optionsMenu.addAction(self.showFilter)
-        
+        optionsMenu.addAction(self.showMovieBox)
         
 
         self.centerbox = QtWidgets.QVBoxLayout()
@@ -195,6 +202,16 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         
         self.plotContourBtn = QtWidgets.QRadioButton("ContourPlot")
         self.fig_2d_props_box.addWidget(self.plotContourBtn)
+        
+        
+        self.plot_opts_box = QtWidgets.QHBoxLayout()
+        self.centerbox.addLayout(self.plot_opts_box)
+        
+        self.aspect_ratio_check = QtWidgets.QCheckBox("Fix Aspect Ratio?")
+        self.aspect_ratio_check.setChecked(False)  
+        self.aspect_ratio_check.toggled.connect(self.makePlot)
+        self.plot_opts_box.addWidget(self.aspect_ratio_check)
+        
         
         #Make colormap selection bar
         self.colormap_lbl = QtWidgets.QLabel("Colormap: ")
@@ -293,7 +310,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.filterbox.addWidget(self.filter_sigma_lbl)
         
         self.filter_sigma  = ScientificDoubleSpinBox()
-        self.filter_sigma.setRange(0.01, 1000)
+        self.filter_sigma.setRange(0.01, 10000)
         self.filter_sigma.setSingleStep(.01)
         self.filter_sigma.setFixedWidth(80)
         self.filter_sigma.setValue(1)
@@ -303,9 +320,104 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.filter_sigma.editingFinished.connect(self.makePlot)
         for x in self.filterbox_widgets:
             x.hide()
+            
+            
+        #CREATE AND FILL THE MOVIE OPTIONS BOX
+        self.moviebox = QtWidgets.QVBoxLayout()
+        self.rightbox.addLayout(self.moviebox)
+        self.moviebox_widgets = []
+        width = 150
+        
+        #Make divider line
+        self.movie_div = QtWidgets.QFrame()
+        self.movie_div.setFrameShape(QtWidgets.QFrame.HLine)
+        self.movie_div.setLineWidth(3)
+        self.moviebox.addWidget(self.movie_div)
+        self.moviebox_widgets.append(self.movie_div)
+        
+        self.movie_box_lbl = QtWidgets.QLabel("Movie Settings")
+        self.movie_box_lbl.setFont(self.title_font)
+        self.movie_box_lbl.setAlignment(QtCore.Qt.AlignCenter)
+        self.moviebox.addWidget(self.movie_box_lbl)
+        self.moviebox_widgets.append(self.movie_box_lbl)
+        
+        
+        #Save dir
+        self.movie_dir_box = QtWidgets.QHBoxLayout()
+        self.moviebox.addLayout(self.movie_dir_box)
+        
+        self.movie_dir_button = QtWidgets.QPushButton("Set Save Dir:")
+        self.movie_dir_button.clicked.connect(self.setMovieDir)
+        self.movie_dir_box.addWidget(self.movie_dir_button)
+        self.moviebox_widgets.append(self.movie_dir_button)
+        
+        self.movie_dir_line = QtWidgets.QLineEdit()
+        self.movie_dir_line.setFixedWidth(3*width)
+        self.movie_dir_line.editingFinished.connect(self.modifyMovieDir)
+        self.movie_dir_box.addWidget(self.movie_dir_line)
+        self.moviebox_widgets.append(self.movie_dir_line)
+        
+        
+        
+        #Select movie axis
+        self.movie_ax_box = QtWidgets.QHBoxLayout()
+        self.moviebox.addLayout(self.movie_ax_box)
+        self.movie_axis_lbl = QtWidgets.QLabel("Movie Axis:")
+        self.movie_ax_box.addWidget(self.movie_axis_lbl)
+        self.moviebox_widgets.append(self.movie_axis_lbl)
+        
+        self.movie_ax = QtWidgets.QComboBox()
+        self.movie_ax_box.addWidget(self.movie_ax)
+        self.moviebox_widgets.append(self.movie_ax)
+        
+        #Movie range box
+        self.movie_range_box = QtWidgets.QHBoxLayout()
+        self.moviebox.addLayout(self.movie_range_box)
+        
+        self.movie_range_lbl = QtWidgets.QLabel("Start, Stop, NFrames:")
+        self.movie_range_box.addWidget(self.movie_range_lbl)
+        self.moviebox_widgets.append(self.movie_range_lbl)
+        
+        self.movie_start = ScientificDoubleSpinBox()
+        self.movie_start.setFixedWidth(width)
+        self.movie_start.setWrapping(True)
+        self.movie_range_box.addWidget(self.movie_start)
+        self.moviebox_widgets.append(self.movie_start)
+        
+        self.movie_stop = ScientificDoubleSpinBox()
+        self.movie_stop.setFixedWidth(width)
+        self.movie_stop.setWrapping(True)
+        self.movie_range_box.addWidget(self.movie_stop)
+        self.moviebox_widgets.append(self.movie_stop)
+        
+        self.movie_num = ScientificDoubleSpinBox()
+        self.movie_num.setFixedWidth(width)
+        self.movie_num.setWrapping(True)
+        self.movie_range_box.addWidget(self.movie_num)
+        self.moviebox_widgets.append(self.movie_num)
+        
+        #Control Buttons
+        self.movie_ctl_box = QtWidgets.QHBoxLayout()
+        self.moviebox.addLayout(self.movie_ctl_box)
+        
+        self.movie_run_button = QtWidgets.QPushButton("Run")
+        self.movie_run_button.setCheckable(True)
+        self.movie_run_button.clicked.connect(self.runMovie)
+        self.movie_ctl_box.addWidget(self.movie_run_button)
+        self.moviebox_widgets.append(self.movie_run_button)
+        
 
 
+        
+        
+    
 
+        
+        #editingFinished.connect(self.updateAxesFieldsAction)
+        
+        
+        for x in self.moviebox_widgets:
+            x.hide()
 
 
 
@@ -433,6 +545,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             #Add the axes names to the dropdown menus
             self.dropdown1.addItem(ax['name'])
             self.dropdown2.addItem(ax['name'])
+            self.movie_ax.addItem(ax['name'])
 
             #Create the top level box for this axis
             ax['box'] = QtWidgets.QVBoxLayout()
@@ -603,7 +716,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
                 
         #Once all the fields have been created, make sure they are set correctly
         self.updateAxesFields()
-        self.showAvgAction()
         self.showFilterAction()
         
 
@@ -688,14 +800,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     
      
      #ACTION FUNTIONS (tied to buttons/fields/etc.)
-    def showAvgAction(self):
-        for ax in self.axes:
-            if self.showAvg.isChecked():
-                for x in ax['avgbox_widgets']:
-                    x.show()
-            else:
-                for x in ax['avgbox_widgets']:
-                    x.hide()
                     
     def showFilterAction(self):
         for ax in self.axes:
@@ -705,6 +809,14 @@ class ApplicationWindow(QtWidgets.QMainWindow):
             else:
                 for x in self.filterbox_widgets:
                     x.hide()
+                    
+    def showMovieBoxAction(self):
+        if self.showMovieBox.isChecked():
+            for x in self.moviebox_widgets:
+                x.show()
+        else:
+            for x in self.moviebox_widgets:
+                x.hide()
                     
     def updateAxesFieldsAction(self):
         if self.debug:
@@ -1070,14 +1182,23 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #Setup axis formats
         self.canvas_ax.ticklabel_format(axis='x', scilimits=(-3,3) )
         self.canvas_ax.ticklabel_format(axis='y', scilimits=(-3,3) )
+        
+        
+        #Set aspect ratio
+        if self.aspect_ratio_check.isChecked():
+            aspect = 'equal'
+        else:
+            aspect = 'auto'
 
         #Make a contour plot or image plot, depending on the selection
         if self.plotContourBtn.isChecked():
-            cs = self.canvas_ax.contourf(self.hax['ax'], self.vax['ax'], self.data, levels, cmap=colormap)
+            cs = self.canvas_ax.contourf(self.hax['ax'], self.vax['ax'], 
+                                         self.data, levels, cmap=colormap,
+                                         aspect=aspect)
         else:
             cs = self.canvas_ax.imshow(self.data, origin='lower',
                                        vmin=cmin, vmax=cmax,
-                                       aspect='auto', interpolation = 'nearest',
+                                       aspect=aspect, interpolation = 'nearest',
                                        extent=[self.hax['ax'][0], self.hax['ax'][-1], 
                                                self.vax['ax'][0], self.vax['ax'][-1]],
                                        cmap = colormap)
@@ -1142,6 +1263,75 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.figure.savefig(savefile)
         
         
+    #**************************************************************************
+    # Movie Functions
+    #**************************************************************************
+    
+    
+    def setMovieDir(self):
+        if self.debug:
+            print("Setting movie dir")
+            
+        opendialog = QtWidgets.QFileDialog()
+        save_dir =  opendialog.getExistingDirectory(self, "Select movie frame save directory")
+        self.movie_dir_line.setText(save_dir)
+        self.movie_dir = pathlibPath(save_dir)
+        
+    def modifyMovieDir(self):
+        self.movie_dir = pathlibPath(self.movie_dir_line.text())
+        self.movie_dir.mkdir(exist_ok=True)
+
+    def saveMovieFrame(self, ax, val):
+        saveframe = os.path.join(os.path.splitext(self.movie_dir)[0], str(ax) + '_' +
+            "{:4.2f}".format(val) + '.png')
+        self.figure.savefig(saveframe)
+
+            
+    def runMovie(self):
+        if self.debug:
+            print("Starting movie loop!")
+            
+        start = self.movie_start.value()
+        stop = self.movie_stop.value()
+        num = self.movie_num.value()
+        
+        rng = np.linspace(start, stop+1, num=num)
+        
+        ax_name = self.movie_ax.currentText()
+        for axis in self.axes:
+            if axis['name'] == ax_name:
+                ax = axis
+
+        if self.movie_run_button.isChecked():   
+            self.movie_run_button.setText("Stop")
+            for i in rng:
+                if not self.movie_run_button.isChecked():
+                    print("ABORT MOVIE!")
+                    return False
+                else:
+                    if ax['valbtn'].isChecked():
+                        ax['val_a'].setValue(i)
+                        i = ax['val_a'].value()
+                    else:
+                        ax['ind_a'].setValue(i)
+                        #This ensures that any formatting on the field is
+                        #now applied to the variable i in the filename
+                        i = ax['ind_a'].value()
+                        
+                    self.updateAxesFields()
+                    self.makePlot()
+                    self.saveMovieFrame(ax_name, i)
+                    
+                #Process events to catch any interupts
+                app.processEvents()
+        else:
+            self.movie_run_button.setText("Run")
+            
+        #If the run finishes without interruption, reset the button
+        self.movie_run_button.setChecked(False)
+        self.movie_run_button.setText("Run")
+
+        
     def numFormat(self, n):
         if n == int(n):
             return '%d' % n
@@ -1167,8 +1357,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
               return a
          else:
               return x
-         
-     
+          
+            
+
+
 # This website helped with code for the scientific notation QSpinBox   
 # https://jdreaver.com/posts/2014-07-28-scientific-notation-spin-box-pyside.html         
 # Regular expression to find floats. Match groups are the whole string, the
