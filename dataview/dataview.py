@@ -35,8 +35,13 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     def buildGUI(self):
         self._main = QtWidgets.QWidget()
         self.setCentralWidget(self._main)
-        self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
-        
+
+        #This little code block makes the window open on top of other windows,
+        #without requiring it to stay there.        
+        self.show()
+        self.activateWindow()
+        self.raise_()
+
         #Playing around with a custom style sheet...
         #self.setStyleSheet(open('stylesheet.css').read())
         
