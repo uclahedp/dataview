@@ -50,6 +50,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         #hdf5 filepath
         self.filepath = ''
         
+        #plot save filepath
+        self.plotsave_dir = ''
+        
         #Directory for movie frames to be saved
         self.movie_dir = ''
     
@@ -476,9 +479,14 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     def fileDialog(self):
         if self.debug:
              print("Beginning file dialog")
+             
+        filedir = os.path.dirname(self.filepath)
         opendialog = QtWidgets.QFileDialog()
         opendialog.setNameFilter("HDF5 Files (*.hf5, *.h5)")
-        userinput = pathlibPath( opendialog.getOpenFileName(self, "Select file to open", "", "hdf5 Files (*.hdf5)")[0] )
+        userinput = pathlibPath( opendialog.getOpenFileName(self, 
+                                                            "Select file to open", 
+                                                            filedir, 
+                                                            "hdf5 Files (*.hdf5)")[0] )
         
         if not userinput.is_file():
              print("Invalid input (ignoring): " + str(userinput) )
@@ -1260,12 +1268,23 @@ class ApplicationWindow(QtWidgets.QMainWindow):
     def savePlot(self):
         savedialog = QtWidgets.QFileDialog()
         
+        #If no plot save directory has been set, offer to save plots in the
+        #dir of the hdf5 file
+        if self.plotsave_dir == '':
+             self.plotsave_dir = os.path.dirname(self.filepath)
+             
+        print(self.plotsave_dir)
+             
+        basename = os.path.basename(self.filepath)
+        fname = os.path.splitext(basename)[0] + '.png'
+        suggested_name = os.path.join(self.plotsave_dir, fname)
         
-        suggested_name = os.path.splitext(self.filepath)[0] + '.png'
-
         
         savefile = savedialog.getSaveFileName(self, "Save as: ", suggested_name, "")[0]
         self.figure.savefig(savefile)
+        
+        #Update plotsave_dir varaible
+        self.plotsave_dir = os.path.dirname(savefile)
         
         
     #**************************************************************************
