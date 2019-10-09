@@ -1273,8 +1273,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         if self.plotsave_dir == '':
              self.plotsave_dir = os.path.dirname(self.filepath)
              
-        print(self.plotsave_dir)
-             
         basename = os.path.basename(self.filepath)
         fname = os.path.splitext(basename)[0] + '.png'
         suggested_name = os.path.join(self.plotsave_dir, fname)
