@@ -196,6 +196,10 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.plot_title_checkbox.stateChanged.connect(self.makePlot)
         self.connectedList.append(self.plot_title_checkbox)
         
+        self.plot_title = QtWidgets.QLineEdit("Custom title text")
+        self.plottype_box.addWidget(self.plot_title)
+        self.plot_title.editingFinished.connect(self.makePlot)
+        self.connectedList.append(self.plot_title)
         
         self.fig_2d_props_box = QtWidgets.QHBoxLayout()
         self.centerbox.addLayout(self.fig_2d_props_box)
@@ -415,12 +419,6 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.moviebox_widgets.append(self.movie_run_button)
         
 
-
-        
-        
-    
-
-        
         #editingFinished.connect(self.updateAxesFieldsAction)
         
         
@@ -1145,9 +1143,9 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.canvas_ax.set_xlabel(str(self.hax['name']) + ' (' + str(self.hax['unit']) + ')')
         self.canvas_ax.set_ylabel('(' + str(self.data_unit_field.text()) + ')')
         
-        if self.plot_title_checkbox.isChecked():
-            title = self.plotTitle()
-            self.canvas_ax.set_title(title)
+        
+        title = self.plotTitle()
+        self.canvas_ax.set_title(title)
 
         #Setup axis formats
         self.canvas_ax.ticklabel_format(axis='x', scilimits=(-3,3) )
@@ -1228,40 +1226,60 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         self.canvas_ax.set_xlabel(str(self.hax['name']) + ' (' + str(self.hax['unit']) + ')')
         self.canvas_ax.set_ylabel(str(self.vax['name']) + ' (' + str(self.vax['unit']) + ')')
 
-        if self.plot_title_checkbox.isChecked():
-            title = self.plotTitle()
-            self.canvas_ax.set_title(title)
+        
+        title = self.plotTitle()
+        self.canvas_ax.set_title(title)
 
         self.canvas.draw()
         
         
     def plotTitle(self):
-        strarr = []
-        strarr.append( os.path.basename(self.filepath) )
-
-        curarr = []
-        otherarr = []
         
-        for i, ax in enumerate(self.axes):
-             axarr = ax['ax']
-             a = int(ax['ind_a'].value())
-             b = int(ax['ind_b'].value())
+        # If not auto, use custom text
+        if not self.plot_title_checkbox.isChecked():
+            return self.plot_title.text()
         
-             if i in self.cur_axes:
-                 val = ( self.numFormat(axarr[a]*ax['unit_factor']),
-                         self.numFormat(axarr[b]*ax['unit_factor']),
-                         ax['unit_field'].text())
-                 curarr.append( ax['name'] + '=[%s,%s] %s' % val )
-             elif ax['avgcheckbox'].isChecked():
-                 otherarr.append( ax['name'] + '= avg' )
-             else:
-                 val = ( self.numFormat(axarr[a]*ax['unit_factor']),
-                         ax['unit_field'].text())
-                 otherarr.append( ax['name'] + '=%s %s' % val )
-                 
-        strarr.append( ', '.join(curarr) )
-        strarr.append( ', '.join(otherarr))
-        return '\n'.join(strarr)
+        # If auto but in movie mode, use movie titling
+        elif self.movie_run_button.isChecked():
+            # Find the movie axis
+            ax_name = self.movie_ax.currentText()
+            for axis in self.axes:
+                if axis['name'] == ax_name:
+                    ax = axis
+            # Find the value and unit
+            val = ax['val_a'].value()
+            unit = ax['disp_unit']
+            
+            return ax['name'] + ' =  {:.3f} '.format(val) + unit
+        
+        # In all other cases create a standard title blob
+        else:         
+            strarr = []
+            strarr.append( os.path.basename(self.filepath) )
+    
+            curarr = []
+            otherarr = []
+            
+            for i, ax in enumerate(self.axes):
+                 axarr = ax['ax']
+                 a = int(ax['ind_a'].value())
+                 b = int(ax['ind_b'].value())
+            
+                 if i in self.cur_axes:
+                     val = ( self.numFormat(axarr[a]*ax['unit_factor']),
+                             self.numFormat(axarr[b]*ax['unit_factor']),
+                             ax['unit_field'].text())
+                     curarr.append( ax['name'] + '=[%s,%s] %s' % val )
+                 elif ax['avgcheckbox'].isChecked():
+                     otherarr.append( ax['name'] + '= avg' )
+                 else:
+                     val = ( self.numFormat(axarr[a]*ax['unit_factor']),
+                             ax['unit_field'].text())
+                     otherarr.append( ax['name'] + '=%s %s' % val )
+                     
+            strarr.append( ', '.join(curarr) )
+            strarr.append( ', '.join(otherarr))
+            return '\n'.join(strarr)
                  
         
         
@@ -1317,7 +1335,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         stop = self.movie_stop.value()
         num = self.movie_num.value()
         
-        rng = np.linspace(start, stop+1, num=num)
+        rng = np.linspace(start, stop+1, num=int(num))
         
         ax_name = self.movie_ax.currentText()
         for axis in self.axes:
